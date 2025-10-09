@@ -1,0 +1,124 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap");
+@import url("https://api.fontshare.com/v2/css?f[]=geist-mono@400,500,600,700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    * {
+        @apply border-gray-200;
+    }
+    body {
+        @apply bg-white text-gray-900 font-sans;
+        margin: 0;
+        padding: 0;
+    }
+}
+
+@layer components {
+    .glass-effect {
+        @apply bg-white/10 backdrop-blur-md border border-white/20;
+    }
+
+    .hero-text-shadow {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .floating-animation {
+        animation: float 6s ease-in-out infinite;
+    }
+
+    .cursor-glow {
+        position: fixed;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(
+            circle,
+            rgba(74, 144, 226, 0.1) 0%,
+            transparent 70%
+        );
+        border-radius: 50%;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        transition: opacity 0.3s ease;
+        z-index: 15;
+        opacity: 0;
+    }
+
+    @media (hover: hover) {
+        .cursor-glow {
+            opacity: 1;
+        }
+    }
+
+    @keyframes float {
+        0%,
+        100% {
+            transform: translateY(0px);
+        }
+        50% {
+            transform: translateY(-10px);
+        }
+    }
+
+    .chat-bubble {
+        @apply rounded-2xl px-4 py-3 max-w-xs shadow-sm;
+    }
+
+    .chat-bubble-user {
+        @apply bg-ethereal-600 text-white ml-auto;
+    }
+
+    .chat-bubble-assistant {
+        @apply bg-gray-100 text-gray-800 mr-auto;
+    }
+
+    /* Interactive button effects */
+    .interactive-button {
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .interactive-button::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.2),
+            transparent
+        );
+        transition: left 0.5s;
+    }
+
+    .interactive-button:hover::before {
+        left: 100%;
+    }
+
+    /* Smooth scroll behavior */
+    html {
+        scroll-behavior: smooth;
+    }
+
+    /* Hide scrollbar */
+    ::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+    }
+
+    * {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    html,
+    body {
+        overflow: hidden;
+    }
+}
