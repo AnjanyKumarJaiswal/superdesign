@@ -1,0 +1,201 @@
+@import url("https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Lexend:wght@100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Climate+Crisis&family=Fira+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Lexend:wght@100..900&display=swap");
+
+.chat-reveal-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    overflow: hidden;
+    animation: fadeOut 1s ease-out 2.5s forwards;
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+.s-hero {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #2a2a35;
+    cursor: none;
+    color: #e0e0e0;
+    font-family: "Fira Sans", sans-serif;
+}
+
+.s-hero .s__title {
+    position: absolute;
+    top: 2vw;
+    left: 2vw;
+    margin: 0;
+    padding: 0;
+    font-size: 1.25vw;
+    line-height: 1.6;
+}
+
+.s__catcher {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    font-weight: 700;
+    font-size: 13vw;
+    letter-spacing: -0.025em;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.s__burger {
+    position: absolute;
+    top: 2vw;
+    right: 2vw;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    width: 56px;
+    height: 48px;
+}
+
+.s__burger__line {
+    margin: 5px 0;
+    width: 100%;
+    height: 2px;
+    background: #0a0a0a;
+}
+
+.s-scene {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #0c0b0e;
+    mask: url(#mask);
+    -webkit-mask: url(#mask);
+    color: #f1f0f9;
+    pointer-events: none;
+}
+
+.s-scene .s__title {
+    position: absolute;
+    top: 2vw;
+    right: 2vw;
+    left: 2vw;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    font-weight: 700;
+    font-size: 13vw;
+    letter-spacing: -0.025em;
+    line-height: 0.9;
+}
+
+.s__title__line:nth-child(2) {
+    margin-left: auto;
+}
+
+.s__word {
+    --max-scale: 3;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    flex-direction: row;
+    font-family: "Climate Crisis", sans-serif;
+    font-size: 20vw;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+@keyframes char-scale {
+    0% {
+        scale: 1 0.1;
+    }
+    50% {
+        scale: 1 var(--max-scale);
+    }
+    100% {
+        scale: 1 0.1;
+    }
+}
+
+.s__word__char {
+    animation: char-scale 1.25s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+    transform-origin: 50% 86.5%;
+}
+
+.s__word__char:nth-child(1) {
+    color: #fe6319;
+}
+
+.s__word__char:nth-child(2) {
+    color: #ff68a8;
+    animation-delay: 0.25s;
+}
+
+.s__word__char:nth-child(3) {
+    color: #009800;
+    animation-delay: 0.5s;
+}
+
+.cursor {
+    position: fixed;
+    top: -1.5vw;
+    left: -1.5vw;
+    z-index: 2;
+    width: 3vw;
+    height: 3vw;
+    background: #88f901;
+    border-radius: 50%;
+    transform: translate3d(var(--x), var(--y), 0);
+    pointer-events: none;
+}
+
+.s-svg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .s-hero .s__title {
+        font-size: 2vw;
+    }
+
+    .s__catcher {
+        font-size: 10vw;
+    }
+
+    .s-scene .s__title {
+        font-size: 10vw;
+    }
+
+    .s__word {
+        font-size: 15vw;
+    }
+
+    .cursor {
+        width: 5vw;
+        height: 5vw;
+        top: -2.5vw;
+        left: -2.5vw;
+    }
+}
