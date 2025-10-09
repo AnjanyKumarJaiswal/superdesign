@@ -10,9 +10,23 @@ export function createTRPCContext(opts: {
   req?: IncomingMessage;
   res?: WebSocket;
 }) {
+  // Extract authorization header for HTTP requests
+  let accessToken: string | undefined;
+  
+  if (opts.req) {
+    const authHeader = 
+      'headers' in opts.req && typeof opts.req.headers === 'object' 
+        ? opts.req.headers.authorization 
+        : undefined;
+    
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.slice(7);
+    }
+  }
+  
   return {
-    // Add any context you need here
-    user: null, // Will be populated from auth when needed
+    accessToken,
+    user: null, // Can be populated from token verification when needed
   };
 }
 

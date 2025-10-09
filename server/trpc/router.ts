@@ -1,19 +1,109 @@
-import { initTRPC } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
-import type { TRPCContext } from "./context";
-import { taskRouter } from "./procedures";
+import { z } from "zod";
+import { router, publicProcedure } from "./trpc";
 import { createWorkflow, workflowEmitter, type WorkflowEvent } from "@/orchestrator/orchestrator";
 import { mcp } from "@/mcp";
-import { z } from "zod";
-
-const t = initTRPC.context<TRPCContext>().create();
-
-export const router = t.router;
-export const publicProcedure = t.procedure;
+import { jobManager } from "@/jobs/jobManager";
 
 export const appRouter = router({
-  health: publicProcedure.query(() => ({ ok: true, timestamp: new Date().toISOString() })),
-  task: taskRouter,
+  // Returns all available endpoints and their status
+  health: publicProcedure.query(() => {
+    const endpoints = {
+      health: "Active - Returns all available endpoints and their status",
+      getProviders: "Active - Returns all supported design platforms",
+      auth: {
+        figma: "Active - Authenticates with Figma and returns access token",
+        framer: "Active - Authenticates with Framer and returns access token",
+        canva: "Active - Authenticates with Canva and returns access token"
+      },
+      generateDesign: "Active - Starts design generation using the specified platform",
+      executeMCPTask: "Active - Directly executes tasks on the MCP server",
+      getJobStatus: "Active - Returns the status of a specific job"
+    };
+    
+    return { 
+      ok: true, 
+      timestamp: new Date().toISOString(),
+      endpoints 
+    };
+  }),
+  
+  // Get available design platform providers
+  getProviders: publicProcedure.query(() => {
+    return { providers: mcp.getProviders() };
+  }),
+  
+  // Platform-specific authentication endpoints
+  auth: router({
+    figma: publicProcedure
+      .input(z.object({
+        code: z.string().optional(),
+        redirectUri: z.string().optional(),
+        state: z.string().optional()
+      }))
+      .mutation(async ({ input }) => {
+        if (!input.code) {
+          // Return authorization URL if no code provided
+          return { 
+            authUrl: `https://www.figma.com/oauth?client_id=figma-client-id&redirect_uri=${encodeURIComponent(input.redirectUri || "http://localhost:3001/auth/callback/figma")}&scope=file_read%20files:write&response_type=code&state=${input.state || ""}`,
+            accessToken: null
+          };
+        }
+        
+        // Mock token exchange - in production would call Figma API
+        return { 
+          accessToken: `figma-mock-token-${Date.now()}`, 
+          expiresIn: 3600,
+          platform: "figma"
+        };
+      }),
+      
+    framer: publicProcedure
+      .input(z.object({
+        code: z.string().optional(),
+        redirectUri: z.string().optional(),
+        state: z.string().optional()
+      }))
+      .mutation(async ({ input }) => {
+        if (!input.code) {
+          // Return authorization URL if no code provided
+          return { 
+            authUrl: `https://framer.com/oauth?client_id=framer-client-id&redirect_uri=${encodeURIComponent(input.redirectUri || "http://localhost:3001/auth/callback/framer")}&scope=read%20write&response_type=code&state=${input.state || ""}`,
+            accessToken: null
+          };
+        }
+        
+        // Mock token exchange - in production would call Framer API
+        return { 
+          accessToken: `framer-mock-token-${Date.now()}`, 
+          expiresIn: 3600,
+          platform: "framer"
+        };
+      }),
+      
+    canva: publicProcedure
+      .input(z.object({
+        code: z.string().optional(),
+        redirectUri: z.string().optional(),
+        state: z.string().optional()
+      }))
+      .mutation(async ({ input }) => {
+        if (!input.code) {
+          // Return authorization URL if no code provided
+          return { 
+            authUrl: `https://www.canva.com/oauth?client_id=canva-client-id&redirect_uri=${encodeURIComponent(input.redirectUri || "http://localhost:3001/auth/callback/canva")}&scope=designs:read%20designs:write&response_type=code&state=${input.state || ""}`,
+            accessToken: null
+          };
+        }
+        
+        // Mock token exchange - in production would call Canva API
+        return { 
+          accessToken: `canva-mock-token-${Date.now()}`, 
+          expiresIn: 3600,
+          platform: "canva"
+        };
+      })
+  }),
 
   // Generate design with LangGraph workflow
   generateDesign: publicProcedure
@@ -27,6 +117,10 @@ export const appRouter = router({
     )
     .mutation(async ({ input }) => {
       const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      
+      // Create job record
+      jobManager.create(taskId);
+      jobManager.setStatus(taskId, "running", { result: { message: "Planning design..." } });
       
       // Start workflow in background
       setImmediate(async () => {
@@ -51,60 +145,14 @@ export const appRouter = router({
             message: "Workflow execution failed",
             error: (error as Error).message,
           });
+          jobManager.setStatus(taskId, "failed", { error: (error as Error).message });
         }
       });
 
       return { taskId, status: "started" };
     }),
 
-  // Real-time subscription for workflow events
-  onWorkflowEvent: publicProcedure
-    .input(z.object({ taskId: z.string() }))
-    .subscription(({ input }) => {
-      return observable<WorkflowEvent>((emit) => {
-        const unsubscribe = workflowEmitter.on(input.taskId, (event) => {
-          emit.next(event);
-        });
-
-        return () => {
-          unsubscribe();
-        };
-      });
-    }),
-
-  // Real-time subscription for MCP events
-  onMCPEvent: publicProcedure
-    .input(z.object({ taskId: z.string().optional() }))
-    .subscription(({ input }) => {
-      return observable((emit) => {
-        const handlers = {
-          taskStart: (data: any) => emit.next({ type: "taskStart", ...data }),
-          taskProgress: (data: any) => emit.next({ type: "taskProgress", ...data }),
-          taskComplete: (data: any) => emit.next({ type: "taskComplete", ...data }),
-          taskError: (data: any) => emit.next({ type: "taskError", ...data }),
-        };
-
-        // Listen to MCP events
-        mcp.on("taskStart", handlers.taskStart);
-        mcp.on("taskProgress", handlers.taskProgress);
-        mcp.on("taskComplete", handlers.taskComplete);
-        mcp.on("taskError", handlers.taskError);
-
-        return () => {
-          mcp.off("taskStart", handlers.taskStart);
-          mcp.off("taskProgress", handlers.taskProgress);
-          mcp.off("taskComplete", handlers.taskComplete);
-          mcp.off("taskError", handlers.taskError);
-        };
-      });
-    }),
-
-  // Get available providers
-  getProviders: publicProcedure.query(() => {
-    return { providers: mcp.getProviders() };
-  }),
-
-  // Direct MCP execution for testing
+  // Direct MCP execution for running design operations
   executeMCPTask: publicProcedure
     .input(
       z.object({
@@ -116,17 +164,34 @@ export const appRouter = router({
     .mutation(async ({ input }) => {
       const taskId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       
-      const result = await mcp.execute({
-        id: taskId,
-        provider: input.provider,
-        action: input.action,
-        payload: input.payload,
-      });
-
-      return { taskId, result };
+      // Create job record for tracking
+      jobManager.create(taskId);
+      jobManager.setStatus(taskId, "running", { result: { message: `Executing ${input.action} on ${input.provider}` } });
+      
+      try {
+        const result = await mcp.execute({
+          id: taskId,
+          provider: input.provider,
+          action: input.action,
+          payload: input.payload,
+        });
+        
+        jobManager.setStatus(taskId, "completed", { result: result.data });
+        return { taskId, result };
+      } catch (error) {
+        jobManager.setStatus(taskId, "failed", { error: (error as Error).message });
+        throw error;
+      }
     }),
-});
+    
+  // Get status of a job/task
+  getJobStatus: publicProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(({ input }) => {
+      const job = jobManager.get(input.jobId);
+      if (!job) return { status: "not_found" as const };
+      return job;
+    }),
+}) satisfies ReturnType<typeof router>;
 
 export type AppRouter = typeof appRouter;
-
-
