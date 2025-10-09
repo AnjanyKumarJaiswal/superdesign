@@ -46,7 +46,7 @@ export class UnifiedMCPServer extends EventEmitter {
     console.log("UnifiedMCPServer initialized");
   }
 
-  private setupHandlers(): void {
+  setupHandlers(): void {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: this.getTools(),
@@ -59,7 +59,7 @@ export class UnifiedMCPServer extends EventEmitter {
     });
   }
 
-  private getTools(): Tool[] {
+  getTools(): Tool[] {
     const baseTools: Tool[] = [
       {
         name: "design_get_providers",
@@ -204,7 +204,7 @@ export class UnifiedMCPServer extends EventEmitter {
     return baseTools;
   }
 
-  private async executeTool(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
+  async executeTool(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
     try {
       switch (name) {
         case "design_get_providers":
@@ -248,7 +248,7 @@ export class UnifiedMCPServer extends EventEmitter {
     }
   }
 
-  private handleGetProviders(): CallToolResult {
+  handleGetProviders(): CallToolResult {
     const providers = Object.keys(this.providers).map(name => ({
       name,
       providerName: this.providers[name].providerName,
@@ -272,7 +272,7 @@ export class UnifiedMCPServer extends EventEmitter {
     return this.providers[name];
   }
 
-  private handleGetStatus(): CallToolResult {
+  handleGetStatus(): CallToolResult {
     return {
       content: [
         {
@@ -292,7 +292,7 @@ export class UnifiedMCPServer extends EventEmitter {
     };
   }
 
-  private async handleCreateElement(args: Record<string, unknown>): Promise<CallToolResult> {
+  async handleCreateElement(args: Record<string, unknown>): Promise<CallToolResult> {
     const { provider, elementType, properties } = args;
 
     if (!provider || typeof provider !== "string") {
@@ -318,7 +318,7 @@ export class UnifiedMCPServer extends EventEmitter {
     };
   }
 
-  private async handleModifyElement(args: Record<string, unknown>): Promise<CallToolResult> {
+  async handleModifyElement(args: Record<string, unknown>): Promise<CallToolResult> {
     const { provider, elementId, properties } = args;
 
     if (!provider || typeof provider !== "string") {
@@ -344,7 +344,7 @@ export class UnifiedMCPServer extends EventEmitter {
     };
   }
 
-  private async handleDeleteElement(args: Record<string, unknown>): Promise<CallToolResult> {
+  async handleDeleteElement(args: Record<string, unknown>): Promise<CallToolResult> {
     const { provider, elementId } = args;
 
     if (!provider || typeof provider !== "string" || !elementId || typeof elementId !== "string") {
@@ -367,7 +367,7 @@ export class UnifiedMCPServer extends EventEmitter {
     };
   }
 
-  private async handleGroupElements(args: Record<string, unknown>): Promise<CallToolResult> {
+  async handleGroupElements(args: Record<string, unknown>): Promise<CallToolResult> {
     const { provider, elementIds, groupName } = args;
 
     if (!provider || typeof provider !== "string" || !elementIds || !Array.isArray(elementIds)) {
@@ -390,7 +390,7 @@ export class UnifiedMCPServer extends EventEmitter {
     };
   }
 
-  private async handleExport(args: Record<string, unknown>): Promise<CallToolResult> {
+  async handleExport(args: Record<string, unknown>): Promise<CallToolResult> {
     const { provider, fileId, format, options } = args;
 
     if (!provider || typeof provider !== "string" || !fileId || typeof fileId !== "string") {
@@ -413,7 +413,7 @@ export class UnifiedMCPServer extends EventEmitter {
     };
   }
 
-  private async handleGetFileInfo(args: Record<string, unknown>): Promise<CallToolResult> {
+  async handleGetFileInfo(args: Record<string, unknown>): Promise<CallToolResult> {
     const { provider, fileId } = args;
 
     if (!provider || typeof provider !== "string" || !fileId || typeof fileId !== "string") {
@@ -436,7 +436,7 @@ export class UnifiedMCPServer extends EventEmitter {
     };
   }
 
-  private async handleListElements(args: Record<string, unknown>): Promise<CallToolResult> {
+  async handleListElements(args: Record<string, unknown>): Promise<CallToolResult> {
     const { provider, fileId, pageId } = args;
 
     if (!provider || typeof provider !== "string" || !fileId || typeof fileId !== "string") {
@@ -458,7 +458,7 @@ export class UnifiedMCPServer extends EventEmitter {
       ],
     };
   }
-  private async execute(task: MCPTask): Promise<MCPResult> {
+  async execute(task: MCPTask): Promise<MCPResult> {
     const provider = this.providers[task.provider];
 
     if (!provider) {
