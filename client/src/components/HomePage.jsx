@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -9,13 +9,17 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import CircularLoader from "./Loading/CircularLoader";
 import RollingText from "./Loading/RollingText";
+import RotatingCarousel from "./RotatingCarousel/RotatingCarousel";
+import ArrowLoader from "./Loading/ArrowLoader";
 
 const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [showContent, setShowContent] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Show content after loading completes
@@ -263,10 +267,24 @@ const HomePage = () => {
     };
   }, [loading]);
 
+  const handleGetStarted = (e) => {
+    e.preventDefault();
+    setTransitioning(true);
+  };
+
+  const handleTransitionComplete = () => {
+    navigate("/prompt");
+  };
+
   return (
     <>
       {/* Loading Screen */}
       {loading && <CircularLoader onLoadComplete={() => setLoading(false)} />}
+
+      {/* Transition Loading Screen */}
+      {transitioning && (
+        <ArrowLoader duration={2000} onComplete={handleTransitionComplete} />
+      )}
 
       <div
         className="min-h-screen relative"
@@ -282,6 +300,9 @@ const HomePage = () => {
           className="absolute inset-0 z-0"
           style={{ width: "100%", height: "100%" }}
         />
+
+        {/* Rotating Carousel on Left */}
+        {!loading && <RotatingCarousel />}
 
         {/* Content */}
         <div className="relative z-10 min-h-screen flex flex-col">
@@ -386,31 +407,17 @@ const HomePage = () => {
                       opacity: 0,
                     }}
                   >
-                    <Link
-                      to="/chat"
-                      className="px-8 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold text-lg rounded-full transform hover:scale-105 transition-all duration-300"
-                      style={{
-                        boxShadow: "0 0 20px rgba(255, 255, 255, 0.1)",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          "rgba(0, 0, 0, 0.9)";
-                        e.currentTarget.style.borderColor =
-                          "rgba(0, 0, 0, 0.8)";
-                        e.currentTarget.style.boxShadow =
-                          "0 0 30px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 0, 0, 0.6)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          "rgba(255, 255, 255, 0.1)";
-                        e.currentTarget.style.borderColor =
-                          "rgba(255, 255, 255, 0.2)";
-                        e.currentTarget.style.boxShadow =
-                          "0 0 20px rgba(255, 255, 255, 0.1)";
-                      }}
+                    <a
+                      href="#"
+                      onClick={handleGetStarted}
+                      className="shimmer-button"
                     >
-                      Get Started
-                    </Link>
+                      <span className="spark__container">
+                        <span className="spark"></span>
+                      </span>
+                      <span className="backdrop"></span>
+                      <span className="text">Get Started</span>
+                    </a>
                   </div>
                 </>
               )}
@@ -497,6 +504,132 @@ const HomePage = () => {
             transform: translateY(0) scale(1);
             filter: blur(0);
           }
+        }
+
+        /* Shimmer Button Styles */
+        .shimmer-button {
+          --cut: 0.1em;
+          --active: 0;
+          --bg:
+            radial-gradient(
+              40% 50% at center 100%,
+              hsl(270 0% 72% / 0.05),
+              transparent
+            ),
+            radial-gradient(
+              80% 100% at center 120%,
+              hsl(260 0% 70% / 0.1),
+              transparent
+            ),
+            hsl(260 0% 12%);
+          background: var(--bg);
+          font-size: 1.2rem;
+          font-weight: 600;
+          border: 0;
+          cursor: pointer;
+          padding: 0.9em 1.3em;
+          display: grid;
+          place-items: center;
+          white-space: nowrap;
+          border-radius: 100px;
+          position: relative;
+          overflow: hidden;
+          box-shadow:
+            0 0.05em 0 0 hsl(260 0% 50%) inset,
+            0 -0.05em 0 0 hsl(260 0% 0%) inset;
+          transition:
+            box-shadow 0.25s,
+            scale 0.25s,
+            background 0.25s;
+          scale: calc(1 + (var(--active) * 0.1));
+          text-decoration: none;
+        }
+
+        .shimmer-button:active {
+          scale: 1;
+        }
+
+        .shimmer-button:hover {
+          --active: 1;
+        }
+
+        .spark {
+          position: absolute;
+          inset: 0;
+          border-radius: 100px;
+          rotate: 0deg;
+          overflow: hidden;
+          mask: linear-gradient(white, transparent 50%);
+          animation: flip calc(1.8s * 2) infinite steps(2, end);
+        }
+
+        @keyframes flip {
+          to {
+            rotate: 360deg;
+          }
+        }
+
+        .spark:before {
+          content: "";
+          position: absolute;
+          width: 200%;
+          aspect-ratio: 1;
+          inset: 0 auto auto 50%;
+          z-index: -1;
+          translate: -50% -15%;
+          rotate: 0;
+          transform: rotate(-90deg);
+          opacity: calc((var(--active)) + 0.4);
+          background: conic-gradient(
+            from 0deg,
+            transparent 0 340deg,
+            white 360deg
+          );
+          transition: opacity 0.25s;
+          animation: rotate 1.8s linear infinite both;
+        }
+
+        .spark:after {
+          content: "";
+          position: absolute;
+          inset: var(--cut);
+          border-radius: 100px;
+        }
+
+        .backdrop {
+          position: absolute;
+          inset: var(--cut);
+          background: var(--bg);
+          border-radius: 100px;
+          transition:
+            background 0.25s,
+            opacity 0.25s;
+        }
+
+        @keyframes rotate {
+          to {
+            transform: rotate(90deg);
+          }
+        }
+
+        .shimmer-button .text {
+          translate: 2% -6%;
+          letter-spacing: 0.01ch;
+          background: linear-gradient(
+            90deg,
+            hsl(0 0% calc((var(--active) * 100%) + 65%)),
+            hsl(0 0% calc((var(--active) * 100%) + 26%))
+          );
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          transition: background 0.25s;
+        }
+
+        .spark__container {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
         }
       `}</style>
     </>

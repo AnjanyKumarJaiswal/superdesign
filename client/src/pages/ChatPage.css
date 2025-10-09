@@ -1,0 +1,89 @@
+.chat-page-wrapper {
+  position: relative;
+  background-color: #222;
+  overflow: hidden;
+}
+
+/* Grid Background */
+.pre-footer-grid-chat {
+  grid-column-gap: 2px;
+  grid-row-gap: 2px;
+  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-auto-columns: 1fr;
+  height: 100vh;
+  width: 100%;
+  display: grid;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.grid-cell {
+  position: relative;
+  display: flex;
+  flex-flow: column;
+  width: 100%;
+  padding: 10px;
+  background-color: #111;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.grid-cell.reveal {
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Grid Lines Cursor Effect */
+.grid-lines-chat {
+  position: absolute;
+  overflow: hidden;
+  width: 100%;
+  height: 100vh;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.grid-lines-cursor-position {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.grid-lines-cursor {
+  aspect-ratio: 1;
+  width: 400px;
+  border-radius: 50%;
+  background-image: radial-gradient(
+    circle farthest-corner at 50% 50%,
+    rgba(187, 187, 187, 0.4) 10%,
+    transparent 70%
+  );
+  position: absolute;
+  top: -200px;
+  left: -200px;
+  opacity: 1;
+  filter: blur(70px);
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .pre-footer-grid-chat {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr 1fr 1fr 1fr;
+  }
+
+  .grid-lines-cursor {
+    width: 300px;
+    top: -150px;
+    left: -150px;
+  }
+}

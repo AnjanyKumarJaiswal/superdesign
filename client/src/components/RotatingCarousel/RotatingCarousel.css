@@ -1,0 +1,367 @@
+/* Rotating Carousel Styles */
+.rotating-carousel-container {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 25vw;
+    height: 100vh;
+    z-index: 15;
+    pointer-events: auto;
+}
+
+.carousel-scroller {
+    scroll-snap-type: y mandatory;
+    height: 100vh;
+    overflow-y: scroll;
+    position: relative;
+    z-index: 1;
+    scroll-timeline: --carouselTimeline;
+    scrollbar-width: none;
+}
+
+.carousel-scroller::-webkit-scrollbar {
+    display: none;
+}
+
+.carousel-buffer {
+    height: 100vh;
+    scroll-snap-align: start;
+}
+
+.carousel-snap {
+    height: 40vh;
+    scroll-snap-align: end;
+}
+
+.carousel-spinner {
+    position: absolute;
+    top: -9999px;
+    bottom: -9999px;
+    left: -25vw;
+    width: 10vw;
+    height: 10vw;
+    margin: auto;
+    animation: carouselScrolly linear;
+    animation-timeline: --carouselTimeline;
+    transform-origin: 50% 50%;
+}
+
+.carousel-spinner-wrap {
+    width: 25vw;
+    height: 100vh;
+    overflow: hidden;
+    position: absolute;
+    top: 0;
+    left: 0;
+    animation: carouselVertical linear;
+    animation-timeline: --carouselTimeline;
+}
+
+.carousel-dot {
+    position: absolute;
+    top: 0;
+    left: calc(12.5vw - 25vw + 1.5vw);
+    bottom: 0;
+    margin: auto;
+    width: 1.5vw;
+    height: 1.5vw;
+    border-radius: 50%;
+    background-color: #ff5e2b;
+    animation: carouselDotAnimation linear;
+    animation-timeline: --carouselTimeline;
+}
+
+.carousel-item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  margin: auto;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  font-size: clamp(14px, 2vw, 24px);
+  white-space: nowrap;
+  letter-spacing: -0.02em;
+  font-family: 'Geist Mono', monospace;
+  transform-origin: 0 50%;
+  opacity: 0.2;
+  color: white;
+  animation: linear;
+  animation-timeline: --carouselTimeline;
+}
+
+.carousel-item-wrap {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    top: 0;
+    margin: auto;
+}
+
+/* Item transforms */
+.carousel-item-1 {
+    transform: rotate(-48deg) translateX(25vw);
+    animation-name: carouselItem1;
+}
+
+.carousel-item-2 {
+    transform: rotate(-36deg) translateX(25vw);
+    animation-name: carouselItem2;
+}
+
+.carousel-item-3 {
+    transform: rotate(-24deg) translateX(25vw);
+    animation-name: carouselItem3;
+}
+
+.carousel-item-4 {
+    transform: rotate(-12deg) translateX(25vw);
+    animation-name: carouselItem4;
+}
+
+.carousel-item-5 {
+    transform: rotate(0deg) translateX(25vw);
+    animation-name: carouselItem5;
+}
+
+.carousel-item-6 {
+    transform: rotate(12deg) translateX(25vw);
+    animation-name: carouselItem6;
+}
+
+.carousel-item-7 {
+    transform: rotate(24deg) translateX(25vw);
+    animation-name: carouselItem7;
+}
+
+.carousel-item-8 {
+    transform: rotate(36deg) translateX(25vw);
+    animation-name: carouselItem8;
+}
+
+/* Item animations */
+@keyframes carouselItem1 {
+  0% {
+    opacity: 1;
+  }
+  12.5% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes carouselItem2 {
+  0% {
+    opacity: 0.2;
+  }
+  0% {
+    opacity: 0.2;
+  }
+  12.5% {
+    opacity: 1;
+  }
+  25% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes carouselItem3 {
+  0% {
+    opacity: 0.2;
+  }
+  12.5% {
+    opacity: 0.2;
+  }
+  25% {
+    opacity: 1;
+  }
+  37.5% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes carouselItem4 {
+  0% {
+    opacity: 0.2;
+  }
+  25% {
+    opacity: 0.2;
+  }
+  37.5% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes carouselItem5 {
+  0% {
+    opacity: 0.2;
+  }
+  37.5% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+  62.5% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes carouselItem6 {
+  0% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.2;
+  }
+  62.5% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes carouselItem7 {
+  0% {
+    opacity: 0.2;
+  }
+  62.5% {
+    opacity: 0.2;
+  }
+  75% {
+    opacity: 1;
+  }
+  87.5% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes carouselItem8 {
+  0% {
+    opacity: 0.2;
+  }
+  75% {
+    opacity: 0.2;
+  }
+  87.5% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.2;
+  }
+}
+
+/* Rotational animation */
+@keyframes carouselScrolly {
+    0% {
+        transform: translateY(0) rotate(0deg);
+    }
+    100% {
+        transform: translateY(0) rotate(-96deg);
+    }
+}
+
+/* Vertical offset animation */
+@keyframes carouselVertical {
+    0% {
+        transform: translateY(0);
+    }
+    100% {
+        transform: translateY(calc(40vh * 8));
+    }
+}
+
+/* Dot animation */
+@keyframes carouselDotAnimation {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    6.25% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    12.5% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    18.75% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    25% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    31.25% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    37.5% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    43.75% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    56.25% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    62.5% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    68.75% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    75% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    81.25% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    87.5% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    93.75% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .rotating-carousel-container {
+        width: 40vw;
+    }
+
+    .carousel-spinner {
+        left: -40vw;
+    }
+
+    .carousel-spinner-wrap {
+        width: 40vw;
+    }
+
+    .carousel-item {
+        transform: rotate(0deg) translateX(40vw);
+    }
+}
