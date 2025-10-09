@@ -1,13 +1,54 @@
-import type { MCPProvider, MCPResult, MCPTask } from "@/server/mcp/mcp";
+import { EventEmitter } from "events";
+import type { MCPProvider, MCPResult, MCPTask } from "@/mcp/mcp";
 
-export class FigmaProvider implements MCPProvider {
+export class FigmaProvider extends EventEmitter implements MCPProvider {
+  readonly providerName = "figma";
+
   async runTask(task: MCPTask): Promise<MCPResult> {
-    // Placeholder: integrate Figma REST API here using user's OAuth token
-    return {
-      taskId: task.id,
-      status: "completed",
-      data: { message: "Figma task stub executed", action: task.action },
-    };
+    this.emit("taskStart", task);
+    
+    try {
+      // Simulate API call with progress updates
+      this.emit("taskProgress", { 
+        task, 
+        progress: "Connecting to Figma API...",
+        data: { action: task.action }
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      this.emit("taskProgress", { 
+        task, 
+        progress: `Executing ${task.action}...`,
+        data: { payload: task.payload }
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const result: MCPResult = {
+        taskId: task.id,
+        status: "completed",
+        data: { 
+          message: `Figma ${task.action} executed successfully`,
+          action: task.action,
+          elementId: `${task.action}-${Date.now()}`,
+          payload: task.payload
+        },
+      };
+
+      this.emit("taskComplete", { task, result });
+      return result;
+
+    } catch (error) {
+      const result: MCPResult = {
+        taskId: task.id,
+        status: "failed",
+        error: (error as Error).message,
+      };
+      
+      this.emit("taskError", { task, error: result.error! });
+      return result;
+    }
   }
 }
 

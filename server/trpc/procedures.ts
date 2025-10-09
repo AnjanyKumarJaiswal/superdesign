@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { publicProcedure, router } from "./router";
-import { mcp } from "@/server/mcp";
-import { jobManager } from "@/server/jobs/jobManager";
-import { runOrchestration } from "@/server/orchestrator/orchestrator";
-import type { TRPCContext } from "./context";
+import { mcp } from "@/mcp";
+import { jobManager } from "@/jobs/jobManager";
+import { runOrchestration } from "@/orchestrator/orchestrator";
+// import type { TRPCContext } from "./context";
 
 export const taskRouter = router({
   startFigmaTask: publicProcedure
@@ -14,7 +14,7 @@ export const taskRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const { accessToken } = ctx as TRPCContext & { accessToken?: string };
+      const { accessToken } = ctx as any;
       const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       jobManager.create(jobId);
 
@@ -39,7 +39,7 @@ export const taskRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const { accessToken } = ctx as TRPCContext & { accessToken?: string };
+      const { accessToken } = ctx as any;
       const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       jobManager.create(jobId);
 
