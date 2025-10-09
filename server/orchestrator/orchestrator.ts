@@ -10,7 +10,11 @@ export interface WorkflowState {
   platform: "figma" | "framer" | "canva";
   accessToken?: string;
   steps: Array<{ tool: string; params: Record<string, unknown> }>;
-  executedSteps: Array<{ tool: string; params: Record<string, unknown>; result?: unknown }>;
+  executedSteps: Array<{
+    tool: string;
+    params: Record<string, unknown>;
+    result?: unknown;
+  }>;
   currentStep: number;
   finalMessage: string | null;
   messages: BaseMessage[];
@@ -31,7 +35,7 @@ export class WorkflowEventEmitter {
   emit(event: WorkflowEvent) {
     const listeners = this.listeners.get(event.taskId);
     if (listeners) {
-      listeners.forEach(listener => listener(event));
+      listeners.forEach((listener) => listener(event));
     }
   }
 
@@ -40,7 +44,7 @@ export class WorkflowEventEmitter {
       this.listeners.set(taskId, new Set());
     }
     this.listeners.get(taskId)!.add(listener);
-    
+
     return () => {
       this.listeners.get(taskId)?.delete(listener);
     };
@@ -50,7 +54,9 @@ export class WorkflowEventEmitter {
 export const workflowEmitter = new WorkflowEventEmitter();
 
 // Planner Node
-async function plannerNode(state: WorkflowState): Promise<Partial<WorkflowState>> {
+async function plannerNode(
+  state: WorkflowState,
+): Promise<Partial<WorkflowState>> {
   workflowEmitter.emit({
     type: "planning",
     taskId: state.taskId,
@@ -78,7 +84,9 @@ async function plannerNode(state: WorkflowState): Promise<Partial<WorkflowState>
 }
 
 // Executor Node
-async function executorNode(state: WorkflowState): Promise<Partial<WorkflowState>> {
+async function executorNode(
+  state: WorkflowState,
+): Promise<Partial<WorkflowState>> {
   const step = state.steps[state.currentStep];
   if (!step) {
     return { finalMessage: "No more steps to execute" };
@@ -128,7 +136,9 @@ async function executorNode(state: WorkflowState): Promise<Partial<WorkflowState
 }
 
 // Finalizer Node
-async function finalizerNode(state: WorkflowState): Promise<Partial<WorkflowState>> {
+async function finalizerNode(
+  state: WorkflowState,
+): Promise<Partial<WorkflowState>> {
   const finalMessage = `Design completed successfully! Created ${state.executedSteps.length} elements.`;
 
   workflowEmitter.emit({
@@ -158,8 +168,19 @@ export function createWorkflow() {
       fileId: { value: (x: string) => x },
       platform: { value: (x: "figma" | "framer" | "canva") => x },
       accessToken: { value: (x: string | undefined) => x },
-      steps: { value: (x: Array<{ tool: string; params: Record<string, unknown> }>) => x },
-      executedSteps: { value: (x: Array<{ tool: string; params: Record<string, unknown>; result?: unknown }>) => x },
+      steps: {
+        value: (x: Array<{ tool: string; params: Record<string, unknown> }>) =>
+          x,
+      },
+      executedSteps: {
+        value: (
+          x: Array<{
+            tool: string;
+            params: Record<string, unknown>;
+            result?: unknown;
+          }>,
+        ) => x,
+      },
       currentStep: { value: (x: number) => x },
       finalMessage: { value: (x: string | null) => x },
       messages: { value: (x: BaseMessage[]) => x },
@@ -187,7 +208,13 @@ export function createWorkflow() {
 }
 
 // Legacy function for backward compatibility
-export async function runOrchestration(opts: { taskId: string; prompt: string; fileId: string; platform: "figma" | "framer" | "canva"; accessToken?: string }) {
+export async function runOrchestration(opts: {
+  taskId: string;
+  prompt: string;
+  fileId: string;
+  platform: "figma" | "framer" | "canva";
+  accessToken?: string;
+}) {
   const workflow = createWorkflow();
   await workflow.invoke({
     taskId: opts.taskId,
@@ -202,5 +229,3 @@ export async function runOrchestration(opts: { taskId: string; prompt: string; f
     messages: [],
   });
 }
-
-

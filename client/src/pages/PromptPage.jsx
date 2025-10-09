@@ -4,6 +4,7 @@ import { ArrowRight, Sparkles, Figma, Code, Layers } from "lucide-react";
 import gsap from "gsap";
 import ArrowLoader from "../components/Loading/ArrowLoader";
 import AnimatedWordSelector from "../components/AnimatedWordSelector";
+import LoginButton from "../components/LoginButton";
 
 const PromptPage = () => {
   const [prompt, setPrompt] = useState("");
@@ -152,6 +153,11 @@ const PromptPage = () => {
           className="relative"
           style={{ opacity: 0, zIndex: 1 }}
         >
+          {/* Login Button - Fixed Position */}
+          <div className="fixed top-6 right-6 z-50">
+            <LoginButton />
+          </div>
+
           {/* Logo and Brand */}
           <div className="mb-8 text-center">
             <div className="flex items-center justify-center gap-3 mb-4">

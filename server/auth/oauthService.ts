@@ -26,7 +26,7 @@ export class OAuthError extends Error {
     message: string,
     public provider: string,
     public code?: string,
-    public details?: unknown
+    public details?: unknown,
   ) {
     super(message);
     this.name = "OAuthError";
@@ -38,15 +38,19 @@ class OAuthService {
     figma: {
       clientId: process.env.FIGMA_CLIENT_ID || "",
       clientSecret: process.env.FIGMA_CLIENT_SECRET || "",
-      redirectUri: process.env.FIGMA_REDIRECT_URI || "http://localhost:3000/auth/callback/figma",
+      redirectUri:
+        process.env.FIGMA_REDIRECT_URI ||
+        "http://localhost:3000/auth/callback/figma",
       authUrl: "https://www.figma.com/oauth",
-      tokenUrl: "https://www.figma.com/api/oauth/token",
-      scope: "file_read files:write",
+      tokenUrl: "https://api.figma.com/v1/oauth/token",
+      scope: "file_content:read",
     },
     framer: {
       clientId: process.env.FRAMER_CLIENT_ID || "",
       clientSecret: process.env.FRAMER_CLIENT_SECRET || "",
-      redirectUri: process.env.FRAMER_REDIRECT_URI || "http://localhost:3000/auth/callback/framer",
+      redirectUri:
+        process.env.FRAMER_REDIRECT_URI ||
+        "http://localhost:3000/auth/callback/framer",
       authUrl: "https://api.framer.com/oauth/authorize",
       tokenUrl: "https://api.framer.com/oauth/token",
       scope: "read write",
@@ -58,7 +62,19 @@ class OAuthService {
    */
   getAuthorizationUrl(provider: ProviderName, state?: string): string {
     const config = this.configs[provider];
-    
+
+    // Debug logging
+    console.log(`[OAuth Debug] Getting auth URL for ${provider}`);
+    console.log(`[OAuth Debug] Config exists:`, !!config);
+    console.log(
+      `[OAuth Debug] Client ID from env:`,
+      process.env.FIGMA_CLIENT_ID ? "SET" : "NOT SET",
+    );
+    console.log(
+      `[OAuth Debug] Client ID in config:`,
+      config?.clientId ? "SET" : "NOT SET",
+    );
+
     if (!config) {
       throw new OAuthError(`Unsupported provider: ${provider}`, provider);
     }
@@ -66,7 +82,7 @@ class OAuthService {
     if (!config.clientId) {
       throw new OAuthError(
         `Missing client ID for ${provider}. Please set ${provider.toUpperCase()}_CLIENT_ID environment variable.`,
-        provider
+        provider,
       );
     }
 
@@ -89,7 +105,7 @@ class OAuthService {
    */
   async exchangeCodeForToken(
     provider: ProviderName,
-    code: string
+    code: string,
   ): Promise<OAuthTokenResponse> {
     const config = this.configs[provider];
 
@@ -100,32 +116,37 @@ class OAuthService {
     if (!config.clientId || !config.clientSecret) {
       throw new OAuthError(
         `Missing OAuth credentials for ${provider}. Please set ${provider.toUpperCase()}_CLIENT_ID and ${provider.toUpperCase()}_CLIENT_SECRET environment variables.`,
-        provider
+        provider,
       );
     }
 
     try {
       // Prepare token request based on provider
       const tokenResponse = await this.makeTokenRequest(provider, config, code);
-      
+
       return tokenResponse;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        const errorMessage = error.response?.data?.error_description || 
-                           error.response?.data?.error || 
-                           error.message;
-        
+        console.error("[OAuth Error] Status:", error.response?.status);
+        console.error("[OAuth Error] URL:", error.config?.url);
+        console.error("[OAuth Error] Response data:", error.response?.data);
+
+        const errorMessage =
+          error.response?.data?.error_description ||
+          error.response?.data?.error ||
+          error.message;
+
         throw new OAuthError(
           `Failed to exchange code for token: ${errorMessage}`,
           provider,
           error.response?.data?.error,
-          error.response?.data
+          error.response?.data,
         );
       }
-      
+
       throw new OAuthError(
         `Unexpected error during token exchange: ${(error as Error).message}`,
-        provider
+        provider,
       );
     }
   }
@@ -136,15 +157,18 @@ class OAuthService {
   private async makeTokenRequest(
     provider: ProviderName,
     config: OAuthConfig,
-    code: string
+    code: string,
   ): Promise<OAuthTokenResponse> {
     if (provider === "figma") {
       return this.exchangeFigmaToken(config, code);
     } else if (provider === "framer") {
       return this.exchangeFramerToken(config, code);
     }
-    
-    throw new OAuthError(`Token exchange not implemented for ${provider}`, provider);
+
+    throw new OAuthError(
+      `Token exchange not implemented for ${provider}`,
+      provider,
+    );
   }
 
   /**
@@ -152,24 +176,37 @@ class OAuthService {
    */
   private async exchangeFigmaToken(
     config: OAuthConfig,
-    code: string
+    code: string,
   ): Promise<OAuthTokenResponse> {
-    const response = await axios.post(
-      config.tokenUrl,
-      new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        redirect_uri: config.redirectUri,
-        code: code,
-        grant_type: "authorization_code",
-      }).toString(),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
+    console.log("[Figma Token Exchange] Starting...");
+    console.log("[Figma Token Exchange] Token URL:", config.tokenUrl);
+    console.log(
+      "[Figma Token Exchange] Client ID:",
+      config.clientId ? "SET" : "NOT SET",
+    );
+    console.log("[Figma Token Exchange] Code received:", code ? "YES" : "NO");
+    console.log("[Figma Token Exchange] Code length:", code?.length);
+
+    const requestBody = new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      redirect_uri: config.redirectUri,
+      code: code,
+      grant_type: "authorization_code",
+    }).toString();
+
+    console.log(
+      "[Figma Token Exchange] Request body:",
+      requestBody.replace(config.clientSecret, "***"),
     );
 
+    const response = await axios.post(config.tokenUrl, requestBody, {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    console.log("[Figma Token Exchange] Response status:", response.status);
     const data = response.data;
 
     return {
@@ -186,7 +223,7 @@ class OAuthService {
    */
   private async exchangeFramerToken(
     config: OAuthConfig,
-    code: string
+    code: string,
   ): Promise<OAuthTokenResponse> {
     const response = await axios.post(
       config.tokenUrl,
@@ -201,7 +238,7 @@ class OAuthService {
         headers: {
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     const data = response.data;
@@ -220,7 +257,7 @@ class OAuthService {
    */
   async refreshAccessToken(
     provider: ProviderName,
-    refreshToken: string
+    refreshToken: string,
   ): Promise<OAuthTokenResponse> {
     const config = this.configs[provider];
 
@@ -231,7 +268,7 @@ class OAuthService {
     if (!config.clientId || !config.clientSecret) {
       throw new OAuthError(
         `Missing OAuth credentials for ${provider}`,
-        provider
+        provider,
       );
     }
 
@@ -248,7 +285,7 @@ class OAuthService {
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
           },
-        }
+        },
       );
 
       const data = response.data;
@@ -265,13 +302,13 @@ class OAuthService {
         throw new OAuthError(
           `Failed to refresh token: ${error.response?.data?.error_description || error.message}`,
           provider,
-          error.response?.data?.error
+          error.response?.data?.error,
         );
       }
-      
+
       throw new OAuthError(
         `Unexpected error during token refresh: ${(error as Error).message}`,
-        provider
+        provider,
       );
     }
   }
@@ -304,7 +341,7 @@ class OAuthService {
    */
   getConfiguredProviders(): ProviderName[] {
     return Object.keys(this.configs).filter((provider) =>
-      this.isProviderConfigured(provider as ProviderName)
+      this.isProviderConfigured(provider as ProviderName),
     ) as ProviderName[];
   }
 }
