@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Send,
   Plus,
@@ -11,21 +11,117 @@ import {
   Figma,
   Layers,
   Sparkles,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import ChatRevealAnimation from "../components/ChatRevealAnimation";
+import { trpc } from "../utils/trpc";
+import { isAuthenticated, getCurrentUser } from "../utils/auth";
+import LoginButton from "../components/LoginButton";
 import "./ChatPage.css";
 
 const ChatPage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const authenticated = isAuthenticated();
+  const user = getCurrentUser();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showReveal, setShowReveal] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedPlatform] = useState(location.state?.platform || null);
+  const [selectedPlatform] = useState(
+    location.state?.platform || user?.platform || "figma",
+  );
+  const [currentTaskId, setCurrentTaskId] = useState(null);
+  const [fileId, setFileId] = useState(
+    () => localStorage.getItem("figma_file_id") || "",
+  );
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const cursorPositionRef = useRef(null);
+
+  // tRPC mutation for design generation
+  const generateDesign = trpc.generateDesign.useMutation({
+    onSuccess: (data) => {
+      console.log("Design generation started:", data);
+      setCurrentTaskId(data.taskId);
+
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content: `Design generation started! Task ID: ${data.taskId}`,
+        taskId: data.taskId,
+        status: "running",
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+      setIsGenerating(false);
+    },
+    onError: (error) => {
+      console.error("Design generation failed:", error);
+
+      let errorMessage = error.message;
+      if (error.message.includes("Unauthorized")) {
+        errorMessage = "Please log in with Figma to generate designs.";
+      }
+
+      const errorMsg = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content: `❌ Error: ${errorMessage}`,
+        error: true,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, errorMsg]);
+      setIsGenerating(false);
+    },
+  });
+
+  // Poll job status
+  const jobStatus = trpc.getJobStatus.useQuery(
+    { jobId: currentTaskId || "" },
+    {
+      enabled: !!currentTaskId,
+      refetchInterval: (data) => {
+        if (data?.status === "completed" || data?.status === "failed") {
+          return false;
+        }
+        return 2000; // Poll every 2 seconds
+      },
+    },
+  );
+
+  // Update message with job status
+  useEffect(() => {
+    if (jobStatus.data && currentTaskId) {
+      setMessages((prev) => {
+        const updated = [...prev];
+        const messageIndex = updated.findIndex(
+          (msg) => msg.taskId === currentTaskId,
+        );
+
+        if (messageIndex !== -1) {
+          const message = updated[messageIndex];
+          message.status = jobStatus.data.status;
+
+          if (jobStatus.data.status === "completed") {
+            message.content =
+              "✅ Design generated successfully! Check your Figma file.";
+          } else if (jobStatus.data.status === "failed") {
+            message.content = `❌ Generation failed: ${jobStatus.data.error || "Unknown error"}`;
+            message.error = true;
+          } else if (jobStatus.data.result?.message) {
+            message.content = `⏳ ${jobStatus.data.result.message}`;
+          }
+        }
+
+        return updated;
+      });
+    }
+  }, [jobStatus.data, currentTaskId]);
 
   // Cursor follow effect
   useEffect(() => {
@@ -59,10 +155,11 @@ const ChatPage = () => {
     };
   }, []);
 
+  // Handle initial prompt from PromptPage
   useEffect(() => {
-    if (location.state?.initialPrompt) {
+    if (location.state?.initialPrompt && !messages.length) {
       const initialPrompt = location.state.initialPrompt;
-      const platform = location.state?.platform || null;
+      const platform = location.state?.platform || user?.platform || "figma";
 
       const platformText = platform
         ? ` (Platform: ${platform.charAt(0).toUpperCase() + platform.slice(1)})`
@@ -77,63 +174,38 @@ const ChatPage = () => {
       };
 
       setMessages([userMessage]);
-      setIsGenerating(true);
 
-      setTimeout(() => {
-        let responseContent = "";
-        if (platform === "figma") {
-          responseContent = `I'll create "${initialPrompt}" in Figma. Setting up the design file with components and layers...`;
-        } else if (platform === "framer") {
-          responseContent = `I'll build "${initialPrompt}" in Framer. Creating interactive components with animations...`;
-        } else {
-          responseContent = `I'll help you create "${initialPrompt}". Here's a design concept with modern UI components.`;
-        }
-
-        const aiMessage = {
+      // Check authentication
+      if (!authenticated) {
+        const authMessage = {
           id: Date.now() + 1,
           role: "assistant",
-          content: responseContent,
-          code: `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${initialPrompt}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold text-white mb-8">${initialPrompt}</h1>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
-                <h2 class="text-2xl font-bold text-white mb-4">Feature 1</h2>
-                <p class="text-gray-300">Modern and responsive design</p>
-            </div>
-            <div class="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
-                <h2 class="text-2xl font-bold text-white mb-4">Feature 2</h2>
-                <p class="text-gray-300">Easy to customize</p>
-            </div>
-            <div class="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
-                <h2 class="text-2xl font-bold text-white mb-4">Feature 3</h2>
-                <p class="text-gray-300">Built with best practices</p>
-            </div>
-        </div>
-    </div>
-</body>
-</html>`,
+          content: "⚠️ Please log in with Figma to generate designs.",
+          requiresAuth: true,
           timestamp: new Date(),
         };
-        setMessages((prev) => [...prev, aiMessage]);
+        setMessages((prev) => [...prev, authMessage]);
         setIsGenerating(false);
-      }, 2000);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+        return;
+      }
 
+      // Trigger design generation
+      setIsGenerating(true);
+      generateDesign.mutate({
+        prompt: initialPrompt,
+        fileId: fileId,
+        platform: platform,
+      });
+    }
+  }, [location.state?.initialPrompt]);
+
+  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
+  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -142,72 +214,71 @@ const ChatPage = () => {
     }
   }, [input]);
 
-  const handleSendMessage = async (messageText = input) => {
-    if (!messageText.trim() || isGenerating) return;
+  const handleSendMessage = () => {
+    if (!input.trim() || isGenerating) return;
 
-    const platformText = selectedPlatform
-      ? ` (Platform: ${selectedPlatform.charAt(0).toUpperCase() + selectedPlatform.slice(1)})`
-      : "";
-
+    // Add user message
     const userMessage = {
       id: Date.now(),
       role: "user",
-      content: messageText + platformText,
+      content: input,
       timestamp: new Date(),
-      platform: selectedPlatform,
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput("");
-    setIsGenerating(true);
 
-    setTimeout(() => {
-      let responseContent = "";
-      if (selectedPlatform === "figma") {
-        responseContent = `I'll create "${messageText}" in Figma. Setting up the design file with components and layers...`;
-      } else if (selectedPlatform === "framer") {
-        responseContent = `I'll build "${messageText}" in Framer. Creating interactive components with animations...`;
-      } else {
-        responseContent = `I'll help you create "${messageText}". Here's a design concept with modern UI components.`;
-      }
-
-      const aiMessage = {
+    // Check authentication
+    if (!authenticated) {
+      const authMessage = {
         id: Date.now() + 1,
         role: "assistant",
-        content: responseContent,
-        code: `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${messageText}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold text-white mb-8">${messageText}</h1>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
-                <h2 class="text-2xl font-bold text-white mb-4">Feature 1</h2>
-                <p class="text-gray-300">Modern and responsive design</p>
-            </div>
-            <div class="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
-                <h2 class="text-2xl font-bold text-white mb-4">Feature 2</h2>
-                <p class="text-gray-300">Easy to customize</p>
-            </div>
-            <div class="bg-white/10 backdrop-blur-md rounded-lg p-6 border border-white/20">
-                <h2 class="text-2xl font-bold text-white mb-4">Feature 3</h2>
-                <p class="text-gray-300">Built with best practices</p>
-            </div>
-        </div>
-    </div>
-</body>
-</html>`,
+        content: "⚠️ Please log in with Figma to generate designs.",
+        requiresAuth: true,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, aiMessage]);
-      setIsGenerating(false);
-    }, 2000);
+      setMessages((prev) => [...prev, authMessage]);
+      return;
+    }
+
+    // Check if we have a file ID
+    if (!fileId) {
+      setShowFileIdPrompt(true);
+      const promptMessage = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content:
+          "📋 Please provide your Figma file ID first. You can find it in your Figma file URL (the part after 'file/').",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, promptMessage]);
+      return;
+    }
+
+    // Generate design with authenticated API call
+    setIsGenerating(true);
+    generateDesign.mutate({
+      prompt: currentInput,
+      fileId: fileId,
+      platform: selectedPlatform,
+    });
+  };
+
+  const handleFileIdSubmit = () => {
+    if (!fileId.trim()) return;
+
+    // Save to localStorage
+    localStorage.setItem("figma_file_id", fileId.trim());
+
+    setShowFileIdPrompt(false);
+    const confirmMessage = {
+      id: Date.now(),
+      role: "assistant",
+      content: `✅ Figma file ID saved: ${fileId.trim()}. You can now generate designs!`,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, confirmMessage]);
   };
 
   const handleKeyDown = (e) => {
@@ -220,20 +291,48 @@ const ChatPage = () => {
   const handleNewChat = () => {
     setMessages([]);
     setInput("");
+    setCurrentTaskId(null);
   };
 
-  const downloadCode = () => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.code) {
-      const blob = new Blob([lastMessage.code], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "generated-design.html";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  };
+  // Show auth required screen if not logged in
+  if (!authenticated) {
+    return (
+      <>
+        {showReveal && (
+          <ChatRevealAnimation
+            duration={3500}
+            onComplete={() => {
+              setTimeout(() => setShowReveal(false), 1000);
+            }}
+          />
+        )}
+        <div
+          className="min-h-screen flex items-center justify-center"
+          style={{
+            backgroundColor: "#030014",
+            fontFamily: "'Geist Mono', monospace",
+          }}
+        >
+          <div className="text-center max-w-md px-6">
+            <Figma className="w-16 h-16 text-purple-400 mx-auto mb-6" />
+            <h2 className="text-3xl font-bold text-white mb-4">
+              Authentication Required
+            </h2>
+            <p className="text-gray-400 mb-8">
+              Please log in with your Figma account to start generating designs.
+            </p>
+            <LoginButton />
+            <button
+              onClick={() => navigate("/prompt")}
+              className="mt-4 text-gray-500 hover:text-gray-300 text-sm"
+            >
+              ← Back to prompt
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -289,6 +388,7 @@ const ChatPage = () => {
               <h1 className="text-white font-semibold text-lg">Superdesign</h1>
             </div>
             <div className="flex items-center gap-2">
+              <LoginButton />
               <button
                 onClick={handleNewChat}
                 className="p-2 hover:bg-white/10 rounded-lg transition-colors"
@@ -302,6 +402,68 @@ const ChatPage = () => {
               >
                 <X className="w-5 h-5 text-white" />
               </button>
+            </div>
+          </div>
+
+          {/* File ID Configuration */}
+          <div className="p-4 border-b border-white/10 bg-white/5">
+            <div className="mb-2 flex items-center gap-2">
+              <Figma className="w-4 h-4 text-purple-400" />
+              <label className="text-sm font-medium text-white">
+                Figma File ID
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={fileId}
+                onChange={(e) => {
+                  const value = e.target.value.trim();
+                  setFileId(value);
+                  if (value) {
+                    localStorage.setItem("figma_file_id", value);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleFileIdSubmit();
+                  }
+                }}
+                placeholder="paste-your-figma-file-id-here"
+                className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-400/60"
+              />
+              <button
+                onClick={handleFileIdSubmit}
+                disabled={!fileId.trim()}
+                className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 disabled:bg-white/5 disabled:cursor-not-allowed border border-purple-400/40 rounded-lg text-white text-sm font-medium transition-all"
+              >
+                {fileId ? "✓" : "Save"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              Find this in your Figma file URL: figma.com/file/
+              <span className="text-purple-400">FILE_ID</span>/...
+            </p>
+            {/* Configuration Status */}
+            <div className="mt-3 flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-1.5">
+                <div
+                  className={`w-2 h-2 rounded-full ${authenticated ? "bg-green-400" : "bg-red-400"}`}
+                ></div>
+                <span
+                  className={authenticated ? "text-green-400" : "text-red-400"}
+                >
+                  {authenticated ? "Authenticated" : "Not authenticated"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div
+                  className={`w-2 h-2 rounded-full ${fileId ? "bg-green-400" : "bg-yellow-400"}`}
+                ></div>
+                <span className={fileId ? "text-green-400" : "text-yellow-400"}>
+                  {fileId ? "File ID set" : "File ID needed"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -448,7 +610,9 @@ const ChatPage = () => {
               />
               <button
                 onClick={() => handleSendMessage()}
-                disabled={!input.trim() || isGenerating}
+                disabled={
+                  !input.trim() || isGenerating || !authenticated || !fileId
+                }
                 className="absolute right-2 bottom-2 p-2 bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 <Send className="w-5 h-5 text-white" />

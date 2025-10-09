@@ -1,10 +1,15 @@
 import { observable } from "@trpc/server/observable";
 import { z } from "zod";
-import { router, publicProcedure } from "./trpc";
-import { createWorkflow, workflowEmitter, type WorkflowEvent } from "@/orchestrator/orchestrator";
+import { router, publicProcedure, protectedProcedure } from "./trpc";
+import {
+  createWorkflow,
+  workflowEmitter,
+  type WorkflowEvent,
+} from "@/orchestrator/orchestrator";
 import { mcp } from "@/mcp";
 import { jobManager } from "@/jobs/jobManager";
 import { oauthService, OAuthError } from "@/auth/oauthService";
+import { generateToken, type UserPayload } from "@/auth/jwtService";
 
 export const appRouter = router({
   // Returns all available endpoints and their status
@@ -15,55 +20,134 @@ export const appRouter = router({
       auth: {
         figma: "Active - Authenticates with Figma and returns access token",
         framer: "Active - Authenticates with Framer and returns access token",
-        canva: "Active - Authenticates with Canva and returns access token"
+        canva: "Active - Authenticates with Canva and returns access token",
       },
-      generateDesign: "Active - Starts design generation using the specified platform",
+      generateDesign:
+        "Active - Starts design generation using the specified platform",
       executeMCPTask: "Active - Directly executes tasks on the MCP server",
-      getJobStatus: "Active - Returns the status of a specific job"
+      getJobStatus: "Active - Returns the status of a specific job",
     };
-    
-    return { 
-      ok: true, 
+
+    return {
+      ok: true,
       timestamp: new Date().toISOString(),
-      endpoints 
+      endpoints,
     };
   }),
-  
+
   // Get available design platform providers
   getProviders: publicProcedure.query(() => {
     return { providers: mcp.getProviders() };
   }),
-  
+
   // Platform-specific authentication endpoints
   auth: router({
-    // Figma OAuth flow
+    // Get OAuth authorization URL
+    getAuthUrl: publicProcedure
+      .input(
+        z.object({
+          platform: z.enum(["figma", "framer"]),
+          state: z.string().optional(),
+        }),
+      )
+      .query(({ input }) => {
+        try {
+          const authUrl = oauthService.getAuthorizationUrl(
+            input.platform,
+            input.state,
+          );
+          return {
+            authUrl,
+            platform: input.platform,
+          };
+        } catch (error) {
+          if (error instanceof OAuthError) {
+            throw new Error(`OAuth error: ${error.message}`);
+          }
+          throw error;
+        }
+      }),
+
+    // OAuth callback - exchange code for JWT
+    callback: publicProcedure
+      .input(
+        z.object({
+          platform: z.enum(["figma", "framer"]),
+          code: z.string(),
+          state: z.string().optional(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        try {
+          // Step 1: Exchange authorization code for access token
+          const tokenResponse = await oauthService.exchangeCodeForToken(
+            input.platform,
+            input.code,
+          );
+
+          // Step 2: Generate JWT with embedded access token
+          const userId = `${input.platform}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+          const userPayload: UserPayload = {
+            userId,
+            platform: input.platform,
+            accessToken: tokenResponse.accessToken,
+            refreshToken: tokenResponse.refreshToken,
+            tokenExpiresAt: Date.now() + tokenResponse.expiresIn * 1000,
+          };
+
+          const jwt = generateToken(userPayload);
+
+          return {
+            token: jwt,
+            userId,
+            platform: input.platform,
+            expiresIn: tokenResponse.expiresIn,
+          };
+        } catch (error) {
+          if (error instanceof OAuthError) {
+            throw new Error(`${input.platform} OAuth error: ${error.message}`);
+          }
+          throw error;
+        }
+      }),
+
+    // Figma OAuth flow (legacy - kept for backward compatibility)
     figma: publicProcedure
-      .input(z.object({
-        code: z.string().optional(),
-        state: z.string().optional()
-      }))
+      .input(
+        z.object({
+          code: z.string().optional(),
+          state: z.string().optional(),
+        }),
+      )
       .mutation(async ({ input }) => {
         try {
           if (!input.code) {
             // Step 1: Return authorization URL
-            const authUrl = oauthService.getAuthorizationUrl("figma", input.state);
-            return { 
+            const authUrl = oauthService.getAuthorizationUrl(
+              "figma",
+              input.state,
+            );
+            return {
               authUrl,
               accessToken: null,
-              platform: "figma"
+              platform: "figma",
             };
           }
-          
+
           // Step 2: Exchange code for access token
-          const tokenResponse = await oauthService.exchangeCodeForToken("figma", input.code);
-          
-          return { 
+          const tokenResponse = await oauthService.exchangeCodeForToken(
+            "figma",
+            input.code,
+          );
+
+          return {
             accessToken: tokenResponse.accessToken,
             refreshToken: tokenResponse.refreshToken,
             expiresIn: tokenResponse.expiresIn,
             tokenType: tokenResponse.tokenType,
             platform: "figma",
-            authUrl: null
+            authUrl: null,
           };
         } catch (error) {
           if (error instanceof OAuthError) {
@@ -72,35 +156,43 @@ export const appRouter = router({
           throw error;
         }
       }),
-      
+
     // Framer OAuth flow
     framer: publicProcedure
-      .input(z.object({
-        code: z.string().optional(),
-        state: z.string().optional()
-      }))
+      .input(
+        z.object({
+          code: z.string().optional(),
+          state: z.string().optional(),
+        }),
+      )
       .mutation(async ({ input }) => {
         try {
           if (!input.code) {
             // Step 1: Return authorization URL
-            const authUrl = oauthService.getAuthorizationUrl("framer", input.state);
-            return { 
+            const authUrl = oauthService.getAuthorizationUrl(
+              "framer",
+              input.state,
+            );
+            return {
               authUrl,
               accessToken: null,
-              platform: "framer"
+              platform: "framer",
             };
           }
-          
+
           // Step 2: Exchange code for access token
-          const tokenResponse = await oauthService.exchangeCodeForToken("framer", input.code);
-          
-          return { 
+          const tokenResponse = await oauthService.exchangeCodeForToken(
+            "framer",
+            input.code,
+          );
+
+          return {
             accessToken: tokenResponse.accessToken,
             refreshToken: tokenResponse.refreshToken,
             expiresIn: tokenResponse.expiresIn,
             tokenType: tokenResponse.tokenType,
             platform: "framer",
-            authUrl: null
+            authUrl: null,
           };
         } catch (error) {
           if (error instanceof OAuthError) {
@@ -109,26 +201,28 @@ export const appRouter = router({
           throw error;
         }
       }),
-      
+
     // Refresh token endpoint
     refresh: publicProcedure
-      .input(z.object({
-        platform: z.enum(["figma", "framer"]),
-        refreshToken: z.string()
-      }))
+      .input(
+        z.object({
+          platform: z.enum(["figma", "framer"]),
+          refreshToken: z.string(),
+        }),
+      )
       .mutation(async ({ input }) => {
         try {
           const tokenResponse = await oauthService.refreshAccessToken(
             input.platform,
-            input.refreshToken
+            input.refreshToken,
           );
-          
+
           return {
             accessToken: tokenResponse.accessToken,
             refreshToken: tokenResponse.refreshToken,
             expiresIn: tokenResponse.expiresIn,
             tokenType: tokenResponse.tokenType,
-            platform: input.platform
+            platform: input.platform,
           };
         } catch (error) {
           if (error instanceof OAuthError) {
@@ -137,45 +231,49 @@ export const appRouter = router({
           throw error;
         }
       }),
-      
+
     // Check if provider is configured
     checkProvider: publicProcedure
-      .input(z.object({
-        platform: z.enum(["figma", "framer"])
-      }))
+      .input(
+        z.object({
+          platform: z.enum(["figma", "framer"]),
+        }),
+      )
       .query(({ input }) => {
         return {
           platform: input.platform,
-          configured: oauthService.isProviderConfigured(input.platform)
+          configured: oauthService.isProviderConfigured(input.platform),
         };
       }),
-      
+
     // Get all configured providers
-    getConfiguredProviders: publicProcedure
-      .query(() => {
-        return {
-          providers: oauthService.getConfiguredProviders()
-        };
-      })
+    getConfiguredProviders: publicProcedure.query(() => {
+      return {
+        providers: oauthService.getConfiguredProviders(),
+      };
+    }),
   }),
 
-  // Generate design with LangGraph workflow
-  generateDesign: publicProcedure
+  // Generate design with LangGraph workflow (requires authentication)
+  generateDesign: protectedProcedure
     .input(
       z.object({
         prompt: z.string(),
         fileId: z.string(),
         platform: z.enum(["figma", "framer", "canva"]).default("figma"),
-        accessToken: z.string().optional(),
-      })
+      }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Use access token from authenticated user
+      const accessToken = ctx.user.accessToken;
       const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      
+
       // Create job record
       jobManager.create(taskId);
-      jobManager.setStatus(taskId, "running", { result: { message: "Planning design..." } });
-      
+      jobManager.setStatus(taskId, "running", {
+        result: { message: "Planning design..." },
+      });
+
       // Start workflow in background
       setImmediate(async () => {
         try {
@@ -185,7 +283,7 @@ export const appRouter = router({
             prompt: input.prompt,
             fileId: input.fileId,
             platform: input.platform,
-            accessToken: input.accessToken,
+            accessToken: accessToken,
             steps: [],
             executedSteps: [],
             currentStep: 0,
@@ -199,11 +297,13 @@ export const appRouter = router({
             message: "Workflow execution failed",
             error: (error as Error).message,
           });
-          jobManager.setStatus(taskId, "failed", { error: (error as Error).message });
+          jobManager.setStatus(taskId, "failed", {
+            error: (error as Error).message,
+          });
         }
       });
 
-      return { taskId, status: "started" };
+      return { taskId, status: "started", userId: ctx.user.userId };
     }),
 
   // Direct MCP execution for running design operations
@@ -213,15 +313,17 @@ export const appRouter = router({
         provider: z.enum(["figma", "framer", "canva"]),
         action: z.string(),
         payload: z.record(z.any()),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const taskId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      
+
       // Create job record for tracking
       jobManager.create(taskId);
-      jobManager.setStatus(taskId, "running", { result: { message: `Executing ${input.action} on ${input.provider}` } });
-      
+      jobManager.setStatus(taskId, "running", {
+        result: { message: `Executing ${input.action} on ${input.provider}` },
+      });
+
       try {
         const result = await mcp.execute({
           id: taskId,
@@ -229,15 +331,17 @@ export const appRouter = router({
           action: input.action,
           payload: input.payload,
         });
-        
+
         jobManager.setStatus(taskId, "completed", { result: result.data });
         return { taskId, result };
       } catch (error) {
-        jobManager.setStatus(taskId, "failed", { error: (error as Error).message });
+        jobManager.setStatus(taskId, "failed", {
+          error: (error as Error).message,
+        });
         throw error;
       }
     }),
-    
+
   // Get status of a job/task
   getJobStatus: publicProcedure
     .input(z.object({ jobId: z.string() }))

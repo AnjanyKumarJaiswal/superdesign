@@ -61,10 +61,22 @@ Server starts on `http://localhost:4000` with WebSocket support.
 
 ### Prerequisites
 - Node.js 18+
-- Figma account (for demo)
+- Figma account with OAuth app registered
 - Environment variables configured (see below)
 
 ### Configuration
+
+#### 1. Register Figma OAuth App
+
+1. Go to https://www.figma.com/developers/apps
+2. Click **"Create app"**
+3. Fill in:
+   - **App Name**: SuperDesign (or your choice)
+   - **Website URL**: `http://localhost:3000`
+   - **Callback URL**: `http://localhost:4000/auth/callback/figma`
+4. Save and copy your **Client ID** and **Client Secret**
+
+#### 2. Configure Environment Variables
 
 Create a `.env` file in the `server/` directory:
 
@@ -72,8 +84,14 @@ Create a `.env` file in the `server/` directory:
 PORT=4000
 NODE_ENV=development
 
-# Platform API Keys
-FIGMA_ACCESS_TOKEN=your_figma_token_here
+# JWT Configuration (REQUIRED)
+JWT_SECRET=your-super-secret-jwt-key-at-least-32-characters-long
+JWT_EXPIRES_IN=7d
+
+# Figma OAuth (REQUIRED)
+FIGMA_CLIENT_ID=your_figma_client_id_here
+FIGMA_CLIENT_SECRET=your_figma_client_secret_here
+FIGMA_REDIRECT_URI=http://localhost:4000/auth/callback/figma
 
 # AI Configuration
 OPENAI_API_KEY=your_openai_key_here
