@@ -4,6 +4,7 @@ import { router, publicProcedure } from "./trpc";
 import { createWorkflow, workflowEmitter, type WorkflowEvent } from "@/orchestrator/orchestrator";
 import { mcp } from "@/mcp";
 import { jobManager } from "@/jobs/jobManager";
+import { oauthService, OAuthError } from "@/auth/oauthService";
 
 export const appRouter = router({
   // Returns all available endpoints and their status
@@ -35,72 +36,125 @@ export const appRouter = router({
   
   // Platform-specific authentication endpoints
   auth: router({
+    // Figma OAuth flow
     figma: publicProcedure
       .input(z.object({
         code: z.string().optional(),
-        redirectUri: z.string().optional(),
         state: z.string().optional()
       }))
       .mutation(async ({ input }) => {
-        if (!input.code) {
-          // Return authorization URL if no code provided
+        try {
+          if (!input.code) {
+            // Step 1: Return authorization URL
+            const authUrl = oauthService.getAuthorizationUrl("figma", input.state);
+            return { 
+              authUrl,
+              accessToken: null,
+              platform: "figma"
+            };
+          }
+          
+          // Step 2: Exchange code for access token
+          const tokenResponse = await oauthService.exchangeCodeForToken("figma", input.code);
+          
           return { 
-            authUrl: `https://www.figma.com/oauth?client_id=figma-client-id&redirect_uri=${encodeURIComponent(input.redirectUri || "http://localhost:3001/auth/callback/figma")}&scope=file_read%20files:write&response_type=code&state=${input.state || ""}`,
-            accessToken: null
+            accessToken: tokenResponse.accessToken,
+            refreshToken: tokenResponse.refreshToken,
+            expiresIn: tokenResponse.expiresIn,
+            tokenType: tokenResponse.tokenType,
+            platform: "figma",
+            authUrl: null
           };
+        } catch (error) {
+          if (error instanceof OAuthError) {
+            throw new Error(`Figma OAuth error: ${error.message}`);
+          }
+          throw error;
         }
-        
-        // Mock token exchange - in production would call Figma API
-        return { 
-          accessToken: `figma-mock-token-${Date.now()}`, 
-          expiresIn: 3600,
-          platform: "figma"
-        };
       }),
       
+    // Framer OAuth flow
     framer: publicProcedure
       .input(z.object({
         code: z.string().optional(),
-        redirectUri: z.string().optional(),
         state: z.string().optional()
       }))
       .mutation(async ({ input }) => {
-        if (!input.code) {
-          // Return authorization URL if no code provided
+        try {
+          if (!input.code) {
+            // Step 1: Return authorization URL
+            const authUrl = oauthService.getAuthorizationUrl("framer", input.state);
+            return { 
+              authUrl,
+              accessToken: null,
+              platform: "framer"
+            };
+          }
+          
+          // Step 2: Exchange code for access token
+          const tokenResponse = await oauthService.exchangeCodeForToken("framer", input.code);
+          
           return { 
-            authUrl: `https://framer.com/oauth?client_id=framer-client-id&redirect_uri=${encodeURIComponent(input.redirectUri || "http://localhost:3001/auth/callback/framer")}&scope=read%20write&response_type=code&state=${input.state || ""}`,
-            accessToken: null
+            accessToken: tokenResponse.accessToken,
+            refreshToken: tokenResponse.refreshToken,
+            expiresIn: tokenResponse.expiresIn,
+            tokenType: tokenResponse.tokenType,
+            platform: "framer",
+            authUrl: null
           };
+        } catch (error) {
+          if (error instanceof OAuthError) {
+            throw new Error(`Framer OAuth error: ${error.message}`);
+          }
+          throw error;
         }
-        
-        // Mock token exchange - in production would call Framer API
-        return { 
-          accessToken: `framer-mock-token-${Date.now()}`, 
-          expiresIn: 3600,
-          platform: "framer"
+      }),
+      
+    // Refresh token endpoint
+    refresh: publicProcedure
+      .input(z.object({
+        platform: z.enum(["figma", "framer"]),
+        refreshToken: z.string()
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const tokenResponse = await oauthService.refreshAccessToken(
+            input.platform,
+            input.refreshToken
+          );
+          
+          return {
+            accessToken: tokenResponse.accessToken,
+            refreshToken: tokenResponse.refreshToken,
+            expiresIn: tokenResponse.expiresIn,
+            tokenType: tokenResponse.tokenType,
+            platform: input.platform
+          };
+        } catch (error) {
+          if (error instanceof OAuthError) {
+            throw new Error(`Token refresh error: ${error.message}`);
+          }
+          throw error;
+        }
+      }),
+      
+    // Check if provider is configured
+    checkProvider: publicProcedure
+      .input(z.object({
+        platform: z.enum(["figma", "framer"])
+      }))
+      .query(({ input }) => {
+        return {
+          platform: input.platform,
+          configured: oauthService.isProviderConfigured(input.platform)
         };
       }),
       
-    canva: publicProcedure
-      .input(z.object({
-        code: z.string().optional(),
-        redirectUri: z.string().optional(),
-        state: z.string().optional()
-      }))
-      .mutation(async ({ input }) => {
-        if (!input.code) {
-          // Return authorization URL if no code provided
-          return { 
-            authUrl: `https://www.canva.com/oauth?client_id=canva-client-id&redirect_uri=${encodeURIComponent(input.redirectUri || "http://localhost:3001/auth/callback/canva")}&scope=designs:read%20designs:write&response_type=code&state=${input.state || ""}`,
-            accessToken: null
-          };
-        }
-        
-        // Mock token exchange - in production would call Canva API
-        return { 
-          accessToken: `canva-mock-token-${Date.now()}`, 
-          expiresIn: 3600,
-          platform: "canva"
+    // Get all configured providers
+    getConfiguredProviders: publicProcedure
+      .query(() => {
+        return {
+          providers: oauthService.getConfiguredProviders()
         };
       })
   }),

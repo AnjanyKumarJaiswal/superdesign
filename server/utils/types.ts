@@ -1,10 +1,7 @@
-// utils/types.ts
-import { EventEmitter } from "events";
 
-// Define supported design platforms
+import { EventEmitter } from "events";
 export type ProviderName = "figma" | "framer" | "canva";
 
-// Task representation for our internal use
 export interface MCPTask {
   id: string;
   provider: ProviderName | "unknown";
@@ -16,7 +13,6 @@ export interface MCPTask {
   };
 }
 
-// Result representation for our internal use
 export interface MCPResult {
   taskId: string;
   status: "queued" | "running" | "completed" | "failed";
@@ -25,7 +21,6 @@ export interface MCPResult {
   completedAt?: number;
 }
 
-// Provider interface for platform-specific implementations
 export interface MCPProvider extends EventEmitter {
   runTask(task: MCPTask): Promise<MCPResult>;
   readonly providerName: string;
@@ -33,7 +28,6 @@ export interface MCPProvider extends EventEmitter {
   shutdown?(): Promise<void>;
 }
 
-// Server events
 export interface ServerEvents {
   taskStart: { provider: string; task: MCPTask };
   taskProgress: { provider: string; task: MCPTask; progress: string; data?: unknown };
@@ -43,4 +37,24 @@ export interface ServerEvents {
   initialized: void;
   shutdown: void;
   error: unknown;
+}
+export interface MCPMessage {
+  id: string;
+  method?: string;
+  command?: string;
+  params?: Record<string, unknown>;
+}
+
+export interface MCPResponseMessage {
+  id: string;
+  result: unknown;
+}
+
+export interface MCPErrorMessage {
+  id: string;
+  error: {
+    code: number;
+    message: string;
+    data?: unknown;
+  };
 }
