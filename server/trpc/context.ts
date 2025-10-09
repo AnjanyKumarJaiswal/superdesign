@@ -1,15 +1,19 @@
 import type { inferAsyncReturnType } from "@trpc/server";
-import { auth } from "@/auth";
+import type { Request, Response } from "express";
+import type { IncomingMessage } from "http";
+import { WebSocket } from "ws";
 
-export type CreateContextOptions = {
-  req: Request;
-};
-
-export async function createTRPCContext(_opts: CreateContextOptions) {
-  const session = await auth();
-  const accessToken = (session as any)?.accessToken as string | undefined;
-  const provider = (session as any)?.provider as string | undefined;
-  return { session, accessToken, provider };
+export function createTRPCContext(opts: {
+  req?: Request;
+  res?: Response;
+} | {
+  req?: IncomingMessage;
+  res?: WebSocket;
+}) {
+  return {
+    // Add any context you need here
+    user: null, // Will be populated from auth when needed
+  };
 }
 
 export type TRPCContext = inferAsyncReturnType<typeof createTRPCContext>;
