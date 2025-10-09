@@ -3,10 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\" --names \"SERVER,CLIENT\" --prefix-colors \"blue,green\"",
+    "server:dev": "cd server && npm run dev",
+    "client:dev": "cd client && npm run dev",
+    "server": "npm run server:dev",
+    "client": "npm run client:dev",
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build",
+    "start": "concurrently \"npm run start:server\" \"npm run start:client\" --names \"SERVER,CLIENT\" --prefix-colors \"blue,green\"",
+    "start:server": "cd server && npm run start",
+    "start:client": "cd client && npm run preview",
+    "lint": "npm run lint:server && npm run lint:client",
+    "lint:server": "cd server && npm run lint --if-present",
+    "lint:client": "cd client && npm run lint",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
   },
   "dependencies": {
     "@langchain/core": "^0.3.78",
@@ -24,6 +35,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.1.2",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "tailwindcss": "^4",
