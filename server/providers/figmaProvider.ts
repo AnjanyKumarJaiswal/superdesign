@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import type { MCPProvider, MCPResult, MCPTask } from "@/mcp/mcp";
+import type { MCPProvider, MCPResult, MCPTask } from "@/utils/types";
 
 export class FigmaProvider extends EventEmitter implements MCPProvider {
   readonly providerName = "figma";

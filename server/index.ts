@@ -10,13 +10,12 @@ import { createTRPCContext } from "@/trpc/context";
 const app = express();
 const server = createServer(app);
 
-// CORS middleware
+
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001"], // Add your frontend URLs
+  origin: ["http://localhost:3000", "http://localhost:3001"], 
   credentials: true,
 }));
 
-// tRPC middleware for HTTP
 app.use(
   "/api/trpc",
   createExpressMiddleware({
@@ -25,12 +24,11 @@ app.use(
   })
 );
 
-// Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// WebSocket server for subscriptions
+
 const wss = new WebSocketServer({ server });
 
 applyWSSHandler({
