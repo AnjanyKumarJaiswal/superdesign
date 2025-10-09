@@ -1,8 +1,8 @@
-# SuperDesign Backend
+# SuperDesign
 
 > **AI-powered design orchestration that turns natural language into production-ready designs**
 
-A standalone tRPC server with LangGraph orchestration for real-time design generation across multiple platforms.
+A **Model Context Protocol (MCP) server** with LangGraph orchestration and tRPC API for real-time design generation across multiple platforms.
 
 ---
 
@@ -22,16 +22,25 @@ Modern design workflows are fundamentally broken:
 
 ## ✨ Our Solution
 
-SuperDesign is a unified AI co-pilot that orchestrates design operations across platforms through natural language. You describe the outcome in plain English, and our server translates that into precise API calls that build the design in real-time.
+SuperDesign is a **unified MCP (Model Context Protocol) server** that orchestrates AI-powered design operations across multiple platforms through a pluggable provider architecture. You describe the outcome in plain English, and our MCP server translates that into precise API calls that build the design in real-time.
 
 **One command. Multiple platforms. Real-time magic.**
 
+### What is MCP?
+
+**Model Context Protocol (MCP)** is an architecture pattern that provides a standardized way for AI agents to interact with external tools and services. Our MCP server acts as a unified abstraction layer that:
+
+- **Standardizes** platform-specific APIs into a common interface
+- **Orchestrates** multi-step workflows across different design tools
+- **Enables** AI agents to reason about and execute design operations
+- **Streams** real-time progress updates back to clients
+
 ### What Makes This Different
 
-This isn't a simple prompt-to-image generator. SuperDesign uses an **AI agentic workflow** - an intelligent agent that can reason, plan, and use a set of "tools" (API connectors for Figma, Framer, etc.) to accomplish complex multi-step design tasks.
+This isn't a simple prompt-to-image generator. SuperDesign uses an **AI agentic workflow** powered by our MCP server - an intelligent agent that can reason, plan, and use a set of "tools" (MCP providers for Figma, Framer, etc.) to accomplish complex multi-step design tasks.
 
 - 🧠 **Plans** the design strategy (layout, components, hierarchy)
-- 🔨 **Executes** precise operations via platform APIs
+- 🔨 **Executes** precise operations via MCP providers
 - ✨ **Refines** based on design principles and best practices
 - 📡 **Streams** real-time progress updates via WebSocket
 
@@ -40,6 +49,7 @@ All while you watch the design materialize in an embedded live view - creating a
 ---
 
 ## 🚀 Quick Start
+```bash
 
 ```bash
 cd server
