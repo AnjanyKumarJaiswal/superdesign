@@ -5,12 +5,15 @@ import gsap from "gsap";
 import ArrowLoader from "../components/Loading/ArrowLoader";
 import AnimatedWordSelector from "../components/AnimatedWordSelector";
 import LoginButton from "../components/LoginButton";
+import FileIdInput from "../components/FileIdInput";
 
 const PromptPage = () => {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState(null); // "figma", "framer", or null for direct design
   const [showContent, setShowContent] = useState(false);
+  const [fileId, setFileId] = useState(() => localStorage.getItem("figma_file_id") || "");
+  const [showFileIdInput, setShowFileIdInput] = useState(false);
   const navigate = useNavigate();
   const revealHeaderRef = useRef(null);
   const contentRef = useRef(null);
@@ -85,14 +88,18 @@ const PromptPage = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (prompt.trim()) {
+    if (prompt.trim() && (!selectedPlatform || selectedPlatform !== "figma" || fileId)) {
       setIsLoading(true);
     }
   };
 
   const handleTransitionComplete = () => {
     navigate("/chat", {
-      state: { initialPrompt: prompt, platform: selectedPlatform },
+      state: { 
+        initialPrompt: prompt, 
+        platform: selectedPlatform,
+        fileId: selectedPlatform === "figma" ? fileId : undefined
+      },
     });
   };
 
@@ -253,6 +260,16 @@ const PromptPage = () => {
                 </button>
               </div>
             </div>
+            
+            {/* File ID Input for Figma */}
+            {selectedPlatform === "figma" && (
+              <FileIdInput 
+                onSubmit={(newFileId) => {
+                  setFileId(newFileId);
+                  setShowFileIdInput(false);
+                }} 
+              />
+            )}
 
             {/* Prompt Input */}
             <form onSubmit={handleSubmit} className="mb-8">
@@ -272,12 +289,15 @@ const PromptPage = () => {
                 />
                 <button
                   type="submit"
-                  disabled={!prompt.trim()}
+                  disabled={!prompt.trim() || (selectedPlatform === "figma" && !fileId)}
                   className="absolute bottom-4 right-4 p-3 bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed rounded-xl transition-all border border-white/10 hover:border-white/30 group"
                 >
                   <ArrowRight className="w-5 h-5 text-white group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
+              {selectedPlatform === "figma" && !fileId && (
+                <p className="mt-2 text-sm text-yellow-400">Please set your Figma File ID above before continuing</p>
+              )}
             </form>
 
             {/* Footer */}

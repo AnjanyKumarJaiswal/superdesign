@@ -11,11 +11,15 @@ import CircularLoader from "./Loading/CircularLoader";
 import RollingText from "./Loading/RollingText";
 import RotatingCarousel from "./RotatingCarousel/RotatingCarousel";
 import ArrowLoader from "./Loading/ArrowLoader";
+import TokenManagerAdmin from "./TokenManagerAdmin";
+import CacheCleaner from "./CacheCleaner";
 
 const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [showContent, setShowContent] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showCacheCleaner, setShowCacheCleaner] = useState(false);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -464,6 +468,62 @@ const HomePage = () => {
                 </svg>
               </a>
             </div>
+            
+            {/* Admin Buttons */}
+            {showContent && (
+              <div className="mx-auto text-center mb-4 flex justify-center gap-4"
+                style={{
+                  animation: "reverseFadeIn 3s ease-out 1s forwards",
+                  opacity: 0,
+                }}
+              >
+                <button 
+                  onClick={() => {
+                    setShowAdminPanel(prev => !prev);
+                    if (showCacheCleaner) setShowCacheCleaner(false);
+                  }} 
+                  className={`text-white/40 hover:text-white/70 transition-all duration-300 text-xs font-light py-1 px-3 rounded-full border border-white/10 bg-black/20 backdrop-blur-sm ${showAdminPanel ? 'bg-black/40' : ''}`}
+                >
+                  {showAdminPanel ? "Hide Admin Panel" : "Show Admin Panel"}
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    setShowCacheCleaner(prev => !prev);
+                    if (showAdminPanel) setShowAdminPanel(false);
+                  }}
+                  className={`text-white/40 hover:text-white/70 transition-all duration-300 text-xs font-light py-1 px-3 rounded-full border border-white/10 bg-black/20 backdrop-blur-sm ${showCacheCleaner ? 'bg-black/40 text-red-300' : ''}`}
+                >
+                  {showCacheCleaner ? "Hide Cache Cleaner" : "Clear OAuth Cache"}
+                </button>
+              </div>
+            )}
+            
+            {/* Token Manager Admin Panel */}
+            {showContent && showAdminPanel && (
+              <div className="mx-auto max-w-md mb-8 transition-all duration-500 opacity-90 hover:opacity-100"
+                style={{
+                  animation: "fadeSlideIn 0.5s ease-out forwards",
+                }}
+              >
+                <div className="admin-panel-wrapper backdrop-blur-sm bg-black/20 border border-white/10 rounded-lg p-4">
+                  <h3 className="text-white text-center mb-4 text-lg font-medium">Admin Controls</h3>
+                  <TokenManagerAdmin />
+                </div>
+              </div>
+            )}
+            
+            {/* Cache Cleaner Panel */}
+            {showContent && showCacheCleaner && (
+              <div className="mx-auto max-w-md mb-8 transition-all duration-500 opacity-90 hover:opacity-100"
+                style={{
+                  animation: "fadeSlideIn 0.5s ease-out forwards",
+                }}
+              >
+                <CacheCleaner />
+              </div>
+            )}
+            
             <div className="text-center">
               <p className="text-white/50 text-xs font-medium">
                 © 2024 SuperDesign. Designed in California.
@@ -503,6 +563,17 @@ const HomePage = () => {
             opacity: 1;
             transform: translateY(0) scale(1);
             filter: blur(0);
+          }
+        }
+        
+        @keyframes fadeSlideIn {
+          0% {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
 

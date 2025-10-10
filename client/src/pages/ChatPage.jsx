@@ -18,6 +18,7 @@ import ChatRevealAnimation from "../components/ChatRevealAnimation";
 import { trpc } from "../utils/trpc";
 import { isAuthenticated, getCurrentUser } from "../utils/auth";
 import LoginButton from "../components/LoginButton";
+import FigmaEmbed from "../components/FigmaEmbed";
 import "./ChatPage.css";
 
 const ChatPage = () => {
@@ -35,7 +36,7 @@ const ChatPage = () => {
   );
   const [currentTaskId, setCurrentTaskId] = useState(null);
   const [fileId, setFileId] = useState(
-    () => localStorage.getItem("figma_file_id") || "",
+    () => location.state?.fileId || localStorage.getItem("figma_file_id") || "",
   );
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -197,7 +198,8 @@ const ChatPage = () => {
         platform: platform,
       });
     }
-  }, [location.state?.initialPrompt]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state?.initialPrompt, messages.length, authenticated, generateDesign]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -244,12 +246,11 @@ const ChatPage = () => {
 
     // Check if we have a file ID
     if (!fileId) {
-      setShowFileIdPrompt(true);
       const promptMessage = {
         id: Date.now() + 1,
         role: "assistant",
         content:
-          "📋 Please provide your Figma file ID first. You can find it in your Figma file URL (the part after 'file/').",
+          "📋 Please provide your Figma file ID first. You can update it in the panel on the left side.",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, promptMessage]);
@@ -271,7 +272,6 @@ const ChatPage = () => {
     // Save to localStorage
     localStorage.setItem("figma_file_id", fileId.trim());
 
-    setShowFileIdPrompt(false);
     const confirmMessage = {
       id: Date.now(),
       role: "assistant",
@@ -407,18 +407,61 @@ const ChatPage = () => {
 
           {/* File ID Configuration */}
           <div className="p-4 border-b border-white/10 bg-white/5">
-            <div className="mb-2 flex items-center gap-2">
-              <Figma className="w-4 h-4 text-purple-400" />
-              <label className="text-sm font-medium text-white">
-                Figma File ID
-              </label>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Figma className="w-4 h-4 text-purple-400" />
+                <label className="text-sm font-medium text-white">
+                  Figma File ID
+                </label>
+              </div>
+              {selectedPlatform === "figma" && (
+                <div className="text-xs text-purple-400">
+                  Live Preview Enabled
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={fileId}
                 onChange={(e) => {
-                  const value = e.target.value.trim();
+                  // Extract file ID if pasting a URL
+                  let value = e.target.value.trim();
+                  console.log('Processing input value:', value);
+                  
+                  try {
+                    // Handle file URLs
+                    if (value.includes('figma.com/file/')) {
+                      const urlParts = value.split('figma.com/file/');
+                      if (urlParts.length > 1) {
+                        const fileIdPart = urlParts[1].split('/')[0].split('?')[0];
+                        console.log('Extracted file ID from URL:', fileIdPart);
+                        value = fileIdPart;
+                      }
+                    }
+                    // Handle prototype URLs
+                    else if (value.includes('figma.com/proto/')) {
+                      const urlParts = value.split('figma.com/proto/');
+                      if (urlParts.length > 1) {
+                        const fileIdPart = urlParts[1].split('/')[0].split('?')[0];
+                        console.log('Extracted file ID from prototype URL:', fileIdPart);
+                        value = fileIdPart;
+                      }
+                    }
+                    // Handle embed URLs
+                    else if (value.includes('embed.figma.com')) {
+                      // Extract the file ID from the embed URL
+                      const match = value.match(/file\/([a-zA-Z0-9]+)/);
+                      if (match && match[1]) {
+                        console.log('Extracted file ID from embed URL:', match[1]);
+                        value = match[1];
+                      }
+                    }
+                  } catch (error) {
+                    console.error("Error parsing Figma URL:", error);
+                  }
+                  
+                  console.log('Final file ID:', value);
                   setFileId(value);
                   if (value) {
                     localStorage.setItem("figma_file_id", value);
@@ -429,7 +472,7 @@ const ChatPage = () => {
                     handleFileIdSubmit();
                   }
                 }}
-                placeholder="paste-your-figma-file-id-here"
+                placeholder="paste your Figma file ID or full URL here"
                 className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-400/60"
               />
               <button
@@ -437,33 +480,41 @@ const ChatPage = () => {
                 disabled={!fileId.trim()}
                 className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 disabled:bg-white/5 disabled:cursor-not-allowed border border-purple-400/40 rounded-lg text-white text-sm font-medium transition-all"
               >
-                {fileId ? "✓" : "Save"}
+                {fileId ? "Update" : "Save"}
               </button>
             </div>
             <p className="mt-2 text-xs text-gray-500">
               Find this in your Figma file URL: figma.com/file/
-              <span className="text-purple-400">FILE_ID</span>/...
+              <span className="text-purple-400">FILE_ID</span>/... or paste the full URL
             </p>
             {/* Configuration Status */}
-            <div className="mt-3 flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1.5">
-                <div
-                  className={`w-2 h-2 rounded-full ${authenticated ? "bg-green-400" : "bg-red-400"}`}
-                ></div>
-                <span
-                  className={authenticated ? "text-green-400" : "text-red-400"}
-                >
-                  {authenticated ? "Authenticated" : "Not authenticated"}
-                </span>
+            <div className="mt-3 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className={`w-2 h-2 rounded-full ${authenticated ? "bg-green-400" : "bg-red-400"}`}
+                  ></div>
+                  <span
+                    className={authenticated ? "text-green-400" : "text-red-400"}
+                  >
+                    {authenticated ? "Authenticated" : "Not authenticated"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className={`w-2 h-2 rounded-full ${fileId ? "bg-green-400" : "bg-yellow-400"}`}
+                  ></div>
+                  <span className={fileId ? "text-green-400" : "text-yellow-400"}>
+                    {fileId ? "File ID set" : "File ID needed"}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div
-                  className={`w-2 h-2 rounded-full ${fileId ? "bg-green-400" : "bg-yellow-400"}`}
-                ></div>
-                <span className={fileId ? "text-green-400" : "text-yellow-400"}>
-                  {fileId ? "File ID set" : "File ID needed"}
-                </span>
-              </div>
+              {fileId && (
+                <div className="text-purple-300">
+                  <Eye className="w-3.5 h-3.5 inline-block mr-1" />
+                  Live preview
+                </div>
+              )}
             </div>
           </div>
 
@@ -640,7 +691,7 @@ const ChatPage = () => {
               </div>
             </div>
             <button
-              onClick={downloadCode}
+              onClick={() => console.log("Download feature not implemented")}
               disabled={messages.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed rounded-lg transition-colors text-white text-sm"
             >
@@ -651,7 +702,11 @@ const ChatPage = () => {
 
           {/* Canvas Content */}
           <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-900/50 to-black/50">
-            {messages.length === 0 || !messages[messages.length - 1]?.code ? (
+            {selectedPlatform === "figma" && fileId ? (
+              <FigmaEmbed 
+                fileId={fileId} 
+              />
+            ) : messages.length === 0 || !messages[messages.length - 1]?.code ? (
               <div className="h-full flex items-center justify-center">
                 <div className="text-center">
                   <Sparkles className="w-16 h-16 text-white/30 mx-auto mb-4" />

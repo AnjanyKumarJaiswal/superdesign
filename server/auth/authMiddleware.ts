@@ -1,16 +1,14 @@
 import { Request, Response, NextFunction } from "express";
-import { verifyToken, extractTokenFromHeader, isPlatformTokenExpired } from "./jwtService";
-import { oauthService } from "./oauthService";
-import { refreshJWTWithNewAccessToken } from "./jwtService";
+import { verifyToken, extractTokenFromHeader } from "./jwtService";
+import { tokenExpirationService } from "./tokenExpirationService";
 
 export interface AuthRequest extends Request {
   user?: {
     userId: string;
-    email?: string;
     platform: "figma" | "framer";
     accessToken: string;
     refreshToken?: string;
-    tokenExpiresAt: number;
+    tokenExpiry?: number;
   };
 }
 
@@ -42,15 +40,30 @@ export function authenticateToken(
     });
     return;
   }
+  
+  // Check if token is expired according to our token expiration service
+  if (decoded.platform === "figma" && !tokenExpirationService.isTokenValid(decoded.userId, decoded.platform)) {
+    res.status(401).json({
+      error: "Unauthorized",
+      message: "Figma token has expired after 30 minutes. Please re-authenticate.",
+      code: "figma_token_expired",
+      requiresReauth: true
+    });
+    return;
+  }
+  
+  // If token is still valid, update remaining time in response headers for client awareness
+  if (decoded.platform === "figma") {
+    const remainingMs = tokenExpirationService.getTimeRemaining(decoded.userId, decoded.platform);
+    res.setHeader('X-Token-Expires-In', Math.floor(remainingMs / 1000).toString());
+  }
 
   // Attach user to request
   req.user = {
     userId: decoded.userId,
-    email: decoded.email,
     platform: decoded.platform,
     accessToken: decoded.accessToken,
     refreshToken: decoded.refreshToken,
-    tokenExpiresAt: decoded.tokenExpiresAt,
   };
 
   next();
@@ -70,89 +83,28 @@ export function optionalAuth(
   if (token) {
     const decoded = verifyToken(token);
     if (decoded) {
+      // Check if token is expired according to our token expiration service
+      if (decoded.platform === "figma" && !tokenExpirationService.isTokenValid(decoded.userId, decoded.platform)) {
+        console.log(`Figma token expired (optional auth) for user ${decoded.userId}`);
+        // Don't set user, treat as not authenticated
+        next();
+        return;
+      }
+      
+      // If token is still valid, update remaining time in response headers for client awareness
+      if (decoded.platform === "figma") {
+        const remainingMs = tokenExpirationService.getTimeRemaining(decoded.userId, decoded.platform);
+        res.setHeader('X-Token-Expires-In', Math.floor(remainingMs / 1000).toString());
+      }
+      
       req.user = {
         userId: decoded.userId,
-        email: decoded.email,
         platform: decoded.platform,
         accessToken: decoded.accessToken,
         refreshToken: decoded.refreshToken,
-        tokenExpiresAt: decoded.tokenExpiresAt,
       };
     }
   }
 
   next();
-}
-
-/**
- * Middleware to check and refresh platform access token if expired
- */
-export async function refreshPlatformTokenIfNeeded(
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  if (!req.user) {
-    next();
-    return;
-  }
-
-  // Check if platform access token is expired or about to expire (within 5 minutes)
-  const expiryThreshold = Date.now() + 5 * 60 * 1000; // 5 minutes from now
-  const needsRefresh = req.user.tokenExpiresAt < expiryThreshold;
-
-  if (needsRefresh && req.user.refreshToken) {
-    try {
-      console.log(`Refreshing ${req.user.platform} access token for user ${req.user.userId}`);
-
-      const tokenResponse = await oauthService.refreshAccessToken(
-        req.user.platform,
-        req.user.refreshToken
-      );
-
-      // Update user object with new tokens
-      req.user.accessToken = tokenResponse.accessToken;
-      req.user.refreshToken = tokenResponse.refreshToken || req.user.refreshToken;
-      req.user.tokenExpiresAt = Date.now() + tokenResponse.expiresIn * 1000;
-
-      // Generate new JWT and send it in response header for client to update
-      const authHeader = req.headers.authorization;
-      const oldToken = extractTokenFromHeader(authHeader);
-
-      if (oldToken) {
-        const newJWT = refreshJWTWithNewAccessToken(
-          oldToken,
-          tokenResponse.accessToken,
-          tokenResponse.refreshToken,
-          tokenResponse.expiresIn
-        );
-
-        if (newJWT) {
-          res.setHeader("X-New-Token", newJWT);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to refresh platform token:", error);
-      // Continue with expired token - let the API call fail naturally
-    }
-  }
-
-  next();
-}
-
-/**
- * Combined middleware: authenticate and auto-refresh tokens
- */
-export function authenticateAndRefresh(
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): void {
-  authenticateToken(req, res, (err) => {
-    if (err) {
-      next(err);
-      return;
-    }
-    refreshPlatformTokenIfNeeded(req, res, next);
-  });
 }

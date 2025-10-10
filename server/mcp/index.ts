@@ -5,13 +5,32 @@ import { FramerProvider } from "../providers/framerProvider";
 // Create MCP server instance
 export const mcp = new UnifiedMCPServer();
 
-// Create provider instances
-const figmaProvider = new FigmaProvider();
+// Create provider instances with environment-based configuration
+const figmaProvider = new FigmaProvider({
+  mcpServerUrl: process.env.FIGMA_MCP_URL,
+  hostUrl: process.env.CLIENT_URL || 'http://localhost:5173'
+});
+
 const framerProvider = new FramerProvider();
 
-// Register providers
-mcp.registerProvider("figma", figmaProvider);
-mcp.registerProvider("framer", framerProvider);
+// Register providers with error handling
+(async () => {
+  try {
+    await mcp.registerProvider("figma", figmaProvider);
+    console.log("Figma provider registered");
+  } catch (error) {
+    console.error("Failed to register Figma provider:", error);
+  }
+
+  try {
+    await mcp.registerProvider("framer", framerProvider);
+    console.log("Framer provider registered");
+  } catch (error) {
+    console.error("Failed to register Framer provider:", error);
+  }
+})().catch(err => {
+  console.error("Error during provider registration:", err);
+});
 
 // Initialize MCP server
 mcp.initialize().catch((error) => {

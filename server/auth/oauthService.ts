@@ -18,6 +18,7 @@ export interface OAuthTokenResponse {
   expiresIn: number;
   tokenType: string;
   scope?: string;
+  providerUserId?: string;
 }
 
 // OAuth error
@@ -40,7 +41,7 @@ class OAuthService {
       clientSecret: process.env.FIGMA_CLIENT_SECRET || "",
       redirectUri:
         process.env.FIGMA_REDIRECT_URI ||
-        "http://localhost:3000/auth/callback/figma",
+        "http://localhost:4000/auth/callback/figma",
       authUrl: "https://www.figma.com/oauth",
       tokenUrl: "https://api.figma.com/v1/oauth/token",
       scope: "file_content:read",
@@ -50,7 +51,7 @@ class OAuthService {
       clientSecret: process.env.FRAMER_CLIENT_SECRET || "",
       redirectUri:
         process.env.FRAMER_REDIRECT_URI ||
-        "http://localhost:3000/auth/callback/framer",
+        "http://localhost:4000/auth/callback/framer",
       authUrl: "https://api.framer.com/oauth/authorize",
       tokenUrl: "https://api.framer.com/oauth/token",
       scope: "read write",
@@ -62,18 +63,8 @@ class OAuthService {
    */
   getAuthorizationUrl(provider: ProviderName, state?: string): string {
     const config = this.configs[provider];
-
-    // Debug logging
-    console.log(`[OAuth Debug] Getting auth URL for ${provider}`);
-    console.log(`[OAuth Debug] Config exists:`, !!config);
-    console.log(
-      `[OAuth Debug] Client ID from env:`,
-      process.env.FIGMA_CLIENT_ID ? "SET" : "NOT SET",
-    );
-    console.log(
-      `[OAuth Debug] Client ID in config:`,
-      config?.clientId ? "SET" : "NOT SET",
-    );
+    
+    console.log(`Getting auth URL for ${provider}`);
 
     if (!config) {
       throw new OAuthError(`Unsupported provider: ${provider}`, provider);
@@ -86,18 +77,24 @@ class OAuthService {
       );
     }
 
+    // Generate random state if not provided
+    const stateParam = state || Math.random().toString(36).substring(2);
+
+    // Build query parameters
     const params = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: config.redirectUri,
       scope: config.scope,
       response_type: "code",
+      state: stateParam
     });
 
-    if (state) {
-      params.append("state", state);
-    }
-
-    return `${config.authUrl}?${params.toString()}`;
+    // Generate the full authorization URL
+    const authUrl = `${config.authUrl}?${params.toString()}`;
+    
+    console.log(`Generated auth URL for ${provider}`);
+    
+    return authUrl;
   }
 
   /**
@@ -108,6 +105,8 @@ class OAuthService {
     code: string,
   ): Promise<OAuthTokenResponse> {
     const config = this.configs[provider];
+
+    console.log(`Starting token exchange for ${provider}`);
 
     if (!config) {
       throw new OAuthError(`Unsupported provider: ${provider}`, provider);
@@ -121,16 +120,28 @@ class OAuthService {
     }
 
     try {
-      // Prepare token request based on provider
-      const tokenResponse = await this.makeTokenRequest(provider, config, code);
+      // Validate code is not empty
+      if (!code || code.trim() === '') {
+        throw new OAuthError('Authorization code is empty or invalid', provider);
+      }
+      
+      // Make token request based on provider
+      let tokenResponse;
+      if (provider === "figma") {
+        tokenResponse = await this.exchangeFigmaToken(config, code);
+      } else if (provider === "framer") {
+        tokenResponse = await this.exchangeFramerToken(config, code);
+      } else {
+        throw new OAuthError(`Token exchange not implemented for ${provider}`, provider);
+      }
 
+      console.log(`Token exchange successful for ${provider}`);
       return tokenResponse;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error("[OAuth Error] Status:", error.response?.status);
-        console.error("[OAuth Error] URL:", error.config?.url);
-        console.error("[OAuth Error] Response data:", error.response?.data);
 
+    } catch (error) {
+      console.error(`Token exchange error for ${provider}:`, error);
+      
+      if (axios.isAxiosError(error)) {
         const errorMessage =
           error.response?.data?.error_description ||
           error.response?.data?.error ||
@@ -152,70 +163,54 @@ class OAuthService {
   }
 
   /**
-   * Make token request to provider
-   */
-  private async makeTokenRequest(
-    provider: ProviderName,
-    config: OAuthConfig,
-    code: string,
-  ): Promise<OAuthTokenResponse> {
-    if (provider === "figma") {
-      return this.exchangeFigmaToken(config, code);
-    } else if (provider === "framer") {
-      return this.exchangeFramerToken(config, code);
-    }
-
-    throw new OAuthError(
-      `Token exchange not implemented for ${provider}`,
-      provider,
-    );
-  }
-
-  /**
    * Exchange Figma authorization code for access token
    */
   private async exchangeFigmaToken(
     config: OAuthConfig,
     code: string,
   ): Promise<OAuthTokenResponse> {
-    console.log("[Figma Token Exchange] Starting...");
-    console.log("[Figma Token Exchange] Token URL:", config.tokenUrl);
-    console.log(
-      "[Figma Token Exchange] Client ID:",
-      config.clientId ? "SET" : "NOT SET",
-    );
-    console.log("[Figma Token Exchange] Code received:", code ? "YES" : "NO");
-    console.log("[Figma Token Exchange] Code length:", code?.length);
-
+    console.log(`Starting Figma token exchange`);
+    
+    // Sanitize the code
+    const sanitizedCode = code.trim();
+    
+    // Prepare the token request body
     const requestBody = new URLSearchParams({
       client_id: config.clientId,
       client_secret: config.clientSecret,
       redirect_uri: config.redirectUri,
-      code: code,
+      code: sanitizedCode,
       grant_type: "authorization_code",
     }).toString();
+    
+    try {
+      const response = await axios.post(config.tokenUrl, requestBody, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "SuperDesign/1.0"
+        },
+      });
 
-    console.log(
-      "[Figma Token Exchange] Request body:",
-      requestBody.replace(config.clientSecret, "***"),
-    );
+      console.log(`Figma token exchange success: ${response.status}`);
+      const data = response.data;
 
-    const response = await axios.post(config.tokenUrl, requestBody, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
+      // Validate response data
+      if (!data.access_token) {
+        throw new Error("Missing access_token in response");
+      }
 
-    console.log("[Figma Token Exchange] Response status:", response.status);
-    const data = response.data;
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresIn: data.expires_in || 7776000, // Figma tokens expire in 90 days
-      tokenType: data.token_type || "Bearer",
-      scope: data.scope,
-    };
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        expiresIn: data.expires_in || 7776000, // Figma tokens expire in 90 days
+        tokenType: data.token_type || "Bearer",
+        scope: data.scope,
+        providerUserId: data.user_id
+      };
+    } catch (error) {
+      console.error(`Figma token exchange failed:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -225,124 +220,57 @@ class OAuthService {
     config: OAuthConfig,
     code: string,
   ): Promise<OAuthTokenResponse> {
-    const response = await axios.post(
-      config.tokenUrl,
-      {
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        redirect_uri: config.redirectUri,
-        code: code,
-        grant_type: "authorization_code",
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    const data = response.data;
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresIn: data.expires_in || 3600,
-      tokenType: data.token_type || "Bearer",
-      scope: data.scope,
-    };
-  }
-
-  /**
-   * Refresh access token using refresh token
-   */
-  async refreshAccessToken(
-    provider: ProviderName,
-    refreshToken: string,
-  ): Promise<OAuthTokenResponse> {
-    const config = this.configs[provider];
-
-    if (!config) {
-      throw new OAuthError(`Unsupported provider: ${provider}`, provider);
-    }
-
-    if (!config.clientId || !config.clientSecret) {
-      throw new OAuthError(
-        `Missing OAuth credentials for ${provider}`,
-        provider,
-      );
-    }
-
+    console.log(`Starting Framer token exchange`);
+    
+    // Sanitize the code
+    const sanitizedCode = code.trim();
+    
     try {
       const response = await axios.post(
         config.tokenUrl,
-        new URLSearchParams({
+        {
           client_id: config.clientId,
           client_secret: config.clientSecret,
-          refresh_token: refreshToken,
-          grant_type: "refresh_token",
-        }).toString(),
+          redirect_uri: config.redirectUri,
+          code: sanitizedCode,
+          grant_type: "authorization_code",
+        },
         {
           headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Type": "application/json",
+            "User-Agent": "SuperDesign/1.0"
           },
         },
       );
 
+      console.log(`Framer token exchange success: ${response.status}`);
       const data = response.data;
+
+      // Validate response
+      if (!data.access_token) {
+        throw new Error("Missing access_token in response");
+      }
 
       return {
         accessToken: data.access_token,
-        refreshToken: data.refresh_token || refreshToken,
-        expiresIn: data.expires_in,
+        refreshToken: data.refresh_token,
+        expiresIn: data.expires_in || 3600,
         tokenType: data.token_type || "Bearer",
         scope: data.scope,
+        providerUserId: data.user_id
       };
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        throw new OAuthError(
-          `Failed to refresh token: ${error.response?.data?.error_description || error.message}`,
-          provider,
-          error.response?.data?.error,
-        );
-      }
-
-      throw new OAuthError(
-        `Unexpected error during token refresh: ${(error as Error).message}`,
-        provider,
-      );
+      console.error(`Framer token exchange failed:`, error);
+      throw error;
     }
   }
 
   /**
-   * Revoke access token
-   */
-  async revokeToken(provider: ProviderName, token: string): Promise<void> {
-    const config = this.configs[provider];
-
-    if (!config) {
-      throw new OAuthError(`Unsupported provider: ${provider}`, provider);
-    }
-
-    // Note: Figma and Framer may not have token revocation endpoints
-    // This is a placeholder for future implementation
-    console.log(`Token revocation not implemented for ${provider}`);
-  }
-
-  /**
-   * Validate if provider credentials are configured
+   * Check if provider credentials are configured
    */
   isProviderConfigured(provider: ProviderName): boolean {
     const config = this.configs[provider];
     return !!(config && config.clientId && config.clientSecret);
-  }
-
-  /**
-   * Get list of configured providers
-   */
-  getConfiguredProviders(): ProviderName[] {
-    return Object.keys(this.configs).filter((provider) =>
-      this.isProviderConfigured(provider as ProviderName),
-    ) as ProviderName[];
   }
 }
 

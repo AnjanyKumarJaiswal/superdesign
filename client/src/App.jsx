@@ -4,6 +4,7 @@ import PromptPage from "./pages/PromptPage";
 import ChatPage from "./pages/ChatPage";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./components/NotFound";
+import TokenExpirationAlert from "./components/TokenExpirationAlert";
 
 function App() {
   return (
@@ -16,6 +17,9 @@ function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        
+        {/* Global token expiration alert */}
+        <TokenExpirationAlert platform="figma" />
       </div>
     </Router>
   );

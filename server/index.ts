@@ -13,7 +13,9 @@ import { WebSocketServer } from "ws";
 import { appRouter } from "@/trpc/router";
 import { createTRPCContext } from "@/trpc/context";
 import { oauthService, OAuthError } from "@/auth/oauthService";
-import { generateToken, type UserPayload } from "@/auth/jwtService";
+import { generateToken, verifyToken, extractTokenFromHeader, type UserPayload } from "@/auth/jwtService";
+import { tokenExpirationService } from "@/auth/tokenExpirationService";
+import { saveTokenToEnv } from "@/utils/envManager";
 
 const app = express();
 const server = createServer(app);
@@ -100,29 +102,103 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Save token to .env file endpoint (requires admin API key)
+app.post("/auth/save-token", async (req, res) => {
+  const { platform, accessToken, refreshToken, apiKey } = req.body;
+  
+  // Security check: require API key
+  const adminApiKey = process.env.ADMIN_API_KEY;
+  if (!adminApiKey || apiKey !== adminApiKey) {
+    return res.status(401).json({ 
+      error: "Unauthorized", 
+      message: "Invalid or missing API key" 
+    });
+  }
+  
+  try {
+    // Save token to .env file
+    const success = await saveTokenToEnv(platform, accessToken, refreshToken);
+    
+    if (success) {
+      res.json({ 
+        status: "success", 
+        message: `Saved ${platform} token to .env file` 
+      });
+    } else {
+      res.status(500).json({ 
+        error: "Failed", 
+        message: "Failed to save token to .env file" 
+      });
+    }
+  } catch (error) {
+    console.error("Error saving token to .env:", error);
+    res.status(500).json({ 
+      error: "Error", 
+      message: error instanceof Error ? error.message : "Unknown error" 
+    });
+  }
+});
+
+// Token status endpoint
+app.get("/auth/token/status", (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = extractTokenFromHeader(authHeader);
+  
+  if (!token) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "No authentication token provided",
+      authenticated: false
+    });
+  }
+  
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Invalid or expired token",
+      authenticated: false
+    });
+  }
+  
+  // Check token validity in our expiration service
+  const isValid = tokenExpirationService.isTokenValid(decoded.userId, decoded.platform);
+  const remainingMs = isValid ? tokenExpirationService.getTimeRemaining(decoded.userId, decoded.platform) : 0;
+  
+  return res.json({
+    authenticated: true,
+    platform: decoded.platform,
+    userId: decoded.userId,
+    valid: isValid,
+    expiresIn: Math.floor(remainingMs / 1000), // in seconds
+    requiresReauth: !isValid && decoded.platform === 'figma'
+  });
+});
+
 // OAuth callback routes
 app.get("/auth/callback/:platform", async (req, res) => {
   const { platform } = req.params;
   const { code, state, error, error_description } = req.query;
+  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
   // Handle OAuth errors
   if (error) {
     const errorMsg = error_description || error;
     console.error(`OAuth error for ${platform}:`, errorMsg);
     return res.redirect(
-      `http://localhost:5173/auth/callback?error=${encodeURIComponent(String(errorMsg))}&platform=${platform}`,
+      `${clientUrl}/auth/callback?error=${encodeURIComponent(String(errorMsg))}&platform=${platform}`,
     );
   }
 
   if (!code) {
     return res.redirect(
-      `http://localhost:5173/auth/callback?error=${encodeURIComponent("No authorization code received")}&platform=${platform}`,
+      `${clientUrl}/auth/callback?error=${encodeURIComponent("No authorization code received")}&platform=${platform}`,
     );
   }
 
   if (platform !== "figma" && platform !== "framer") {
     return res.redirect(
-      `http://localhost:5173/auth/callback?error=${encodeURIComponent("Unsupported platform")}&platform=${platform}`,
+      `${clientUrl}/auth/callback?error=${encodeURIComponent("Unsupported platform")}&platform=${platform}`,
     );
   }
 
@@ -133,28 +209,58 @@ app.get("/auth/callback/:platform", async (req, res) => {
       String(code),
     );
 
-    // Generate JWT with embedded access token
-    const userId = `${platform}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Generate simple userId
+    const userId = `${platform}-user-${Math.random().toString(36).slice(2, 10)}`;
 
+    // Create minimal user payload
     const userPayload: UserPayload = {
       userId,
       platform,
       accessToken: tokenResponse.accessToken,
-      refreshToken: tokenResponse.refreshToken,
-      tokenExpiresAt: Date.now() + tokenResponse.expiresIn * 1000,
+      refreshToken: tokenResponse.refreshToken
     };
 
     const jwt = generateToken(userPayload);
 
+    // Register token with expiration service
+    // For Figma, use our configured expiry time; otherwise use the provider's expiry time
+    const expiryTimeMs = platform === 'figma'
+      ? (process.env.FIGMA_TOKEN_EXPIRY ? parseInt(process.env.FIGMA_TOKEN_EXPIRY, 10) * 1000 : 30 * 60 * 1000)
+      : (tokenResponse.expiresIn || 3600) * 1000;
+    
+    tokenExpirationService.registerToken(
+      userId,
+      platform,
+      tokenResponse.accessToken,
+      expiryTimeMs
+    );
+    
+    // If SAVE_TOKENS_TO_ENV is enabled, save tokens to .env file
+    if (process.env.SAVE_TOKENS_TO_ENV === 'true') {
+      try {
+        await saveTokenToEnv(
+          platform, 
+          tokenResponse.accessToken, 
+          tokenResponse.refreshToken
+        );
+        console.log(`Saved ${platform} tokens to .env file`);
+      } catch (error) {
+        console.error(`Failed to save ${platform} tokens to .env:`, error);
+        // Non-critical error, continue with authentication
+      }
+    }
+
     // Redirect back to frontend with token
-    const redirectUrl = `http://localhost:5173/auth/callback?token=${jwt}&platform=${platform}${state ? `&state=${state}` : ""}`;
+    // Always include state parameter to help with client-side validation
+    const redirectUrl = `${clientUrl}/auth/callback?token=${jwt}&platform=${platform}${state ? `&state=${state}` : ""}`;
+    console.log(`Redirecting to client with token and state: ${state}`);
     res.redirect(redirectUrl);
   } catch (error) {
     console.error(`OAuth callback error for ${platform}:`, error);
     const errorMsg =
       error instanceof OAuthError ? error.message : "Authentication failed";
     res.redirect(
-      `http://localhost:5173/auth/callback?error=${encodeURIComponent(errorMsg)}&platform=${platform}`,
+      `${clientUrl}/auth/callback?error=${encodeURIComponent(errorMsg)}&platform=${platform}`,
     );
   }
 });
@@ -169,20 +275,15 @@ app.get("/auth/:platform", (req, res) => {
   }
 
   try {
-    // Generate a random state for CSRF protection if not provided
-    const oauthState = state
-      ? String(state)
-      : Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15);
+    // Always pass through the state parameter from the client
+    const authState = state ? String(state) : undefined;
+    
+    // Get authorization URL - pass state parameter directly
+    const authUrl = oauthService.getAuthorizationUrl(platform, authState);
 
-    const authUrl = oauthService.getAuthorizationUrl(platform, oauthState);
-
-    // Debug logging
-    console.log(`[OAuth] Redirecting to ${platform} OAuth page`);
-    console.log(`[OAuth] Auth URL: ${authUrl}`);
-    console.log(`[OAuth] State: ${oauthState}`);
-
-    // Redirect to OAuth provider instead of returning JSON
+    console.log(`Redirecting to ${platform} OAuth authorization page with state: ${authState}`);
+    
+    // Redirect to OAuth provider
     res.redirect(authUrl);
   } catch (error) {
     console.error(`Error generating auth URL for ${platform}:`, error);

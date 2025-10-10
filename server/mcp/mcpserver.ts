@@ -502,27 +502,40 @@ export class UnifiedMCPServer extends EventEmitter {
   }
 
   async registerProvider(name: string, provider: MCPProvider): Promise<void> {
-    if (provider.initialize) {
-      await provider.initialize();
+    try {
+      // Initialize provider if it has initialize method
+      if (provider.initialize) {
+        try {
+          await provider.initialize();
+          console.log(`Provider ${name} initialized successfully`);
+        } catch (initError) {
+          console.warn(`Provider ${name} initialization failed but will continue in limited mode:`, initError);
+          // We still register the provider even if initialization fails
+          // It might still be able to handle some operations
+        }
+      }
+
+      this.providers[name] = provider;
+
+      // Forward provider events
+      provider.on("taskStart", (task: MCPTask) => {
+        this.emit("taskStart", { provider: name, task });
+      });
+      provider.on("taskProgress", (data: { task: MCPTask; progress: string; data?: unknown }) => {
+        this.emit("taskProgress", { provider: name, ...data });
+      });
+      provider.on("taskComplete", (data: { task: MCPTask; result: MCPResult }) => {
+        this.emit("taskComplete", { provider: name, ...data });
+      });
+      provider.on("taskError", (data: { task: MCPTask; error: string }) => {
+        this.emit("taskError", { provider: name, ...data });
+      });
+
+      console.log(`Registered provider: ${name}`);
+    } catch (error) {
+      console.error(`Failed to register provider ${name}:`, error);
+      throw error;
     }
-
-    this.providers[name] = provider;
-
-    // Forward provider events
-    provider.on("taskStart", (task: MCPTask) => {
-      this.emit("taskStart", { provider: name, task });
-    });
-    provider.on("taskProgress", (data: { task: MCPTask; progress: string; data?: unknown }) => {
-      this.emit("taskProgress", { provider: name, ...data });
-    });
-    provider.on("taskComplete", (data: { task: MCPTask; result: MCPResult }) => {
-      this.emit("taskComplete", { provider: name, ...data });
-    });
-    provider.on("taskError", (data: { task: MCPTask; error: string }) => {
-      this.emit("taskError", { provider: name, ...data });
-    });
-
-    console.log(`Registered provider: ${name}`);
   }
 
   async unregisterProvider(name: string): Promise<void> {

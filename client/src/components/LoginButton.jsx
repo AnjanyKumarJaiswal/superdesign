@@ -1,16 +1,51 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Figma, Loader2 } from "lucide-react";
-import { isAuthenticated, logout } from "../utils/auth";
+import { isAuthenticated, logout, clearAuth } from "../utils/auth";
+
+// API URL from environment or default
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 const LoginButton = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const authenticated = isAuthenticated();
+  const [authenticated, setAuthenticated] = useState(isAuthenticated());
+
+  // Check authentication status periodically
+  useEffect(() => {
+    const checkAuth = () => {
+      const authStatus = isAuthenticated();
+      setAuthenticated(authStatus);
+    };
+    
+    // Check on mount
+    checkAuth();
+    
+    // Set up interval to check
+    const interval = setInterval(checkAuth, 60000); // Check every minute
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const generateStateParam = () => {
+    // Generate a random state parameter for CSRF protection
+    const randomState = Math.random().toString(36).substring(2, 15);
+    // Store in sessionStorage for verification after redirect
+    sessionStorage.setItem('oauth_state', randomState);
+    return randomState;
+  };
 
   const handleLogin = async () => {
     setIsLoading(true);
     try {
-      // Redirect to OAuth authorization
-      const authUrl = `http://localhost:4000/auth/figma`;
+      // Clear any existing auth data to prevent using stale tokens
+      clearAuth();
+      
+      // Generate state parameter for CSRF protection
+      const state = generateStateParam();
+      
+      // Redirect to OAuth authorization with state parameter
+      const authUrl = `${API_URL}/auth/figma?state=${state}`;
+      console.log(`Redirecting to auth URL: ${authUrl}`);
+      
       window.location.href = authUrl;
     } catch (error) {
       console.error("Login error:", error);
@@ -20,7 +55,7 @@ const LoginButton = () => {
 
   const handleLogout = () => {
     logout();
-    window.location.reload();
+    setAuthenticated(false);
   };
 
   if (authenticated) {

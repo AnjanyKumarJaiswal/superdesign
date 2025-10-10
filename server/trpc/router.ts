@@ -26,6 +26,7 @@ export const appRouter = router({
         "Active - Starts design generation using the specified platform",
       executeMCPTask: "Active - Directly executes tasks on the MCP server",
       getJobStatus: "Active - Returns the status of a specific job",
+      getFigmaEmbed: "Active - Returns embed URL for a Figma file",
     };
 
     return {
@@ -92,8 +93,7 @@ export const appRouter = router({
             userId,
             platform: input.platform,
             accessToken: tokenResponse.accessToken,
-            refreshToken: tokenResponse.refreshToken,
-            tokenExpiresAt: Date.now() + tokenResponse.expiresIn * 1000,
+            refreshToken: tokenResponse.refreshToken
           };
 
           const jwt = generateToken(userPayload);
@@ -202,7 +202,7 @@ export const appRouter = router({
         }
       }),
 
-    // Refresh token endpoint
+    // Refresh token endpoint - currently disabled in simplified implementation
     refresh: publicProcedure
       .input(
         z.object({
@@ -211,25 +211,7 @@ export const appRouter = router({
         }),
       )
       .mutation(async ({ input }) => {
-        try {
-          const tokenResponse = await oauthService.refreshAccessToken(
-            input.platform,
-            input.refreshToken,
-          );
-
-          return {
-            accessToken: tokenResponse.accessToken,
-            refreshToken: tokenResponse.refreshToken,
-            expiresIn: tokenResponse.expiresIn,
-            tokenType: tokenResponse.tokenType,
-            platform: input.platform,
-          };
-        } catch (error) {
-          if (error instanceof OAuthError) {
-            throw new Error(`Token refresh error: ${error.message}`);
-          }
-          throw error;
-        }
+        throw new Error('Token refresh is not implemented in simplified OAuth flow');
       }),
 
     // Check if provider is configured
@@ -248,8 +230,13 @@ export const appRouter = router({
 
     // Get all configured providers
     getConfiguredProviders: publicProcedure.query(() => {
+      // In simplified implementation, return all providers that are configured
+      const providers = ["figma", "framer"].filter(p => 
+        oauthService.isProviderConfigured(p as "figma" | "framer")
+      );
+      
       return {
-        providers: oauthService.getConfiguredProviders(),
+        providers: providers as ("figma" | "framer")[],
       };
     }),
   }),
@@ -349,6 +336,58 @@ export const appRouter = router({
       const job = jobManager.get(input.jobId);
       if (!job) return { status: "not_found" as const };
       return job;
+    }),
+    
+  // Get Figma embed URL for a file
+  getFigmaEmbed: protectedProcedure
+    .input(z.object({ fileId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        // Get provider from mcp registry
+        const figmaProvider = mcp.getProvider('figma');
+        
+        if (!figmaProvider) {
+          console.warn('Figma provider not available');
+          return {
+            error: 'Figma provider not available',
+            fileId: input.fileId,
+            embedUrl: null,
+            timestamp: new Date().toISOString()
+          };
+        }
+        
+        // Get access token from authenticated user
+        const accessToken = ctx.user.accessToken;
+        
+        if (!accessToken) {
+          console.warn('No access token available for Figma embed');
+          return {
+            error: 'No access token available. Please authenticate with Figma',
+            fileId: input.fileId,
+            embedUrl: null,
+            timestamp: new Date().toISOString()
+          };
+        }
+        
+        // Generate embed URL - use the proper typings
+        const embedUrl = await (figmaProvider as any).getEmbedUrl(input.fileId, accessToken);
+        
+        return {
+          embedUrl,
+          fileId: input.fileId,
+          timestamp: new Date().toISOString()
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`Failed to get Figma embed URL:`, error);
+        // Return a graceful error response instead of throwing
+        return {
+          error: `Failed to get Figma embed URL: ${errorMessage}`,
+          fileId: input.fileId,
+          embedUrl: null,
+          timestamp: new Date().toISOString()
+        };
+      }
     }),
 }) satisfies ReturnType<typeof router>;
 

@@ -64,6 +64,19 @@ Server starts on `http://localhost:4000` with WebSocket support.
 - Figma account with OAuth app registered
 - Environment variables configured (see below)
 
+### Security Features
+
+#### Token Expiration Management
+SuperDesign implements a robust token expiration system:
+
+- **Automatic Expiration**: Figma tokens are automatically expired after 30 minutes for security
+- **Server-side Validation**: Token validation happens on the server with real-time status checks
+- **Expiration Events**: Client receives warning notifications when tokens are about to expire
+- **Auto Re-authentication**: Seamless re-authentication flow when tokens expire
+- **Configurable**: Token lifetime can be customized via the `FIGMA_TOKEN_EXPIRY` environment variable
+- **Credential Change Detection**: Automatically clears cached tokens when client ID/secret changes
+- **Environment Storage**: Option to save OAuth tokens to .env file for development and testing
+
 ### Configuration
 
 #### 1. Register Figma OAuth App
@@ -93,6 +106,17 @@ FIGMA_CLIENT_ID=your_figma_client_id_here
 FIGMA_CLIENT_SECRET=your_figma_client_secret_here
 FIGMA_REDIRECT_URI=http://localhost:4000/auth/callback/figma
 
+# Figma MCP Connection (REQUIRED for design operations)
+FIGMA_MCP_URL=https://mcp.figma.com/mcp
+CLIENT_URL=http://localhost:5173
+
+# Token Expiration Configuration (Optional)
+FIGMA_TOKEN_EXPIRY=1800 # Figma token expiry in seconds (default: 1800 = 30 minutes)
+
+# Token Management (Optional)
+SAVE_TOKENS_TO_ENV=false # Set to 'true' to automatically save OAuth tokens to .env file
+ADMIN_API_KEY=your_secure_admin_key # Required if using the token save API endpoint
+
 # AI Configuration
 OPENAI_API_KEY=your_openai_key_here
 ```
@@ -103,6 +127,8 @@ OPENAI_API_KEY=your_openai_key_here
 
 ### HTTP Endpoints
 - `GET /health` - Health check
+- `GET /auth/token/status` - Check token validity and expiration
+- `POST /auth/save-token` - Save OAuth tokens to .env file (requires admin API key)
 - `POST /api/trpc/*` - tRPC HTTP procedures
 
 ### WebSocket Endpoints

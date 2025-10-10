@@ -6,11 +6,9 @@ import { verifyToken, extractTokenFromHeader } from "@/auth/jwtService";
 
 export interface AuthenticatedUser {
   userId: string;
-  email?: string;
   platform: "figma" | "framer";
   accessToken: string;
   refreshToken?: string;
-  tokenExpiresAt: number;
 }
 
 export function createTRPCContext(
@@ -43,11 +41,9 @@ export function createTRPCContext(
         if (decoded) {
           user = {
             userId: decoded.userId,
-            email: decoded.email,
             platform: decoded.platform,
             accessToken: decoded.accessToken,
             refreshToken: decoded.refreshToken,
-            tokenExpiresAt: decoded.tokenExpiresAt,
           };
 
           // Keep legacy accessToken for backward compatibility
