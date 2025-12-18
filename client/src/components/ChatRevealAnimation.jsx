@@ -24,7 +24,6 @@ const ChatRevealAnimation = ({ onComplete, duration = 4000 }) => {
       height: window.innerHeight,
     };
 
-    // Auto-animate mouse in circular pattern
     let angle = 0;
     const centerX = viewport.width / 2;
     const centerY = viewport.height / 2;
@@ -76,7 +75,6 @@ const ChatRevealAnimation = ({ onComplete, duration = 4000 }) => {
 
       particlesRef.current.push(particle);
 
-      // Animate particle
       const tl = gsap.timeline();
       tl.to(particle, {
         scale: size * 2,
@@ -103,7 +101,6 @@ const ChatRevealAnimation = ({ onComplete, duration = 4000 }) => {
     const render = () => {
       animateMouse();
 
-      // Smooth mouse
       mouse.smoothX += (mouse.x - mouse.smoothX) * 0.1;
       mouse.smoothY += (mouse.y - mouse.smoothY) * 0.1;
 
@@ -111,13 +108,11 @@ const ChatRevealAnimation = ({ onComplete, duration = 4000 }) => {
 
       emitParticle();
 
-      // Update cursor
       if (cursorRef.current) {
         cursorRef.current.style.setProperty("--x", mouse.smoothX + "px");
         cursorRef.current.style.setProperty("--y", mouse.smoothY + "px");
       }
 
-      // Trigger re-render
       setParticles([...particlesRef.current]);
 
       if (particlesRef.current.length > 0) {
@@ -130,7 +125,6 @@ const ChatRevealAnimation = ({ onComplete, duration = 4000 }) => {
 
     const renderLoop = requestAnimationFrame(render);
 
-    // Auto complete after duration
     const timer = setTimeout(() => {
       if (onComplete) onComplete();
     }, duration);

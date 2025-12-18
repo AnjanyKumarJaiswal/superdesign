@@ -42,7 +42,6 @@ const ChatPage = () => {
   const textareaRef = useRef(null);
   const cursorPositionRef = useRef(null);
 
-  // tRPC mutation for design generation
   const generateDesign = trpc.generateDesign.useMutation({
     onSuccess: (data) => {
       console.log("Design generation started:", data);
@@ -81,7 +80,6 @@ const ChatPage = () => {
     },
   });
 
-  // Poll job status
   const jobStatus = trpc.getJobStatus.useQuery(
     { jobId: currentTaskId || "" },
     {
@@ -90,12 +88,11 @@ const ChatPage = () => {
         if (data?.status === "completed" || data?.status === "failed") {
           return false;
         }
-        return 2000; // Poll every 2 seconds
+        return 2000;
       },
     },
   );
 
-  // Update message with job status
   useEffect(() => {
     if (jobStatus.data && currentTaskId) {
       setMessages((prev) => {
@@ -124,7 +121,6 @@ const ChatPage = () => {
     }
   }, [jobStatus.data, currentTaskId]);
 
-  // Cursor follow effect
   useEffect(() => {
     let targetX = 0,
       targetY = 0;
@@ -156,7 +152,6 @@ const ChatPage = () => {
     };
   }, []);
 
-  // Handle initial prompt from PromptPage
   useEffect(() => {
     if (location.state?.initialPrompt && !messages.length) {
       const initialPrompt = location.state.initialPrompt;
@@ -176,7 +171,6 @@ const ChatPage = () => {
 
       setMessages([userMessage]);
 
-      // Check authentication
       if (!authenticated) {
         const authMessage = {
           id: Date.now() + 1,
@@ -190,7 +184,6 @@ const ChatPage = () => {
         return;
       }
 
-      // Trigger design generation
       setIsGenerating(true);
       generateDesign.mutate({
         prompt: initialPrompt,
@@ -198,16 +191,14 @@ const ChatPage = () => {
         platform: platform,
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state?.initialPrompt, messages.length, authenticated, generateDesign]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -219,7 +210,6 @@ const ChatPage = () => {
   const handleSendMessage = () => {
     if (!input.trim() || isGenerating) return;
 
-    // Add user message
     const userMessage = {
       id: Date.now(),
       role: "user",
@@ -231,7 +221,6 @@ const ChatPage = () => {
     const currentInput = input;
     setInput("");
 
-    // Check authentication
     if (!authenticated) {
       const authMessage = {
         id: Date.now() + 1,
@@ -244,7 +233,6 @@ const ChatPage = () => {
       return;
     }
 
-    // Check if we have a file ID
     if (!fileId) {
       const promptMessage = {
         id: Date.now() + 1,
@@ -257,7 +245,6 @@ const ChatPage = () => {
       return;
     }
 
-    // Generate design with authenticated API call
     setIsGenerating(true);
     generateDesign.mutate({
       prompt: currentInput,
@@ -269,7 +256,6 @@ const ChatPage = () => {
   const handleFileIdSubmit = () => {
     if (!fileId.trim()) return;
 
-    // Save to localStorage
     localStorage.setItem("figma_file_id", fileId.trim());
 
     const confirmMessage = {
@@ -294,7 +280,6 @@ const ChatPage = () => {
     setCurrentTaskId(null);
   };
 
-  // Show auth required screen if not logged in
   if (!authenticated) {
     return (
       <>
@@ -353,7 +338,6 @@ const ChatPage = () => {
           opacity: showReveal ? 0 : 1,
         }}
       >
-        {/* Grid Background */}
         <div className="pre-footer-grid-chat">
           <div className="grid-cell"></div>
           <div className="grid-cell"></div>
@@ -375,13 +359,10 @@ const ChatPage = () => {
           </div>
         </div>
 
-        {/* Left Sidebar - Chat Panel */}
         <div
-          className={`${
-            sidebarOpen ? "w-full md:w-1/2 lg:w-2/5" : "w-0"
-          } transition-all duration-300 flex flex-col border-r border-white/10 bg-black/20 backdrop-blur-sm relative z-10`}
+          className={`${sidebarOpen ? "w-full md:w-1/2 lg:w-2/5" : "w-0"
+            } transition-all duration-300 flex flex-col border-r border-white/10 bg-black/20 backdrop-blur-sm relative z-10`}
         >
-          {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/10">
             <div className="flex items-center gap-3">
               <img src="/logo/Logo.png" alt="SuperDesign" className="h-8 w-8" />
@@ -405,7 +386,6 @@ const ChatPage = () => {
             </div>
           </div>
 
-          {/* File ID Configuration */}
           <div className="p-4 border-b border-white/10 bg-white/5">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -425,12 +405,10 @@ const ChatPage = () => {
                 type="text"
                 value={fileId}
                 onChange={(e) => {
-                  // Extract file ID if pasting a URL
                   let value = e.target.value.trim();
                   console.log('Processing input value:', value);
-                  
+
                   try {
-                    // Handle file URLs
                     if (value.includes('figma.com/file/')) {
                       const urlParts = value.split('figma.com/file/');
                       if (urlParts.length > 1) {
@@ -439,7 +417,6 @@ const ChatPage = () => {
                         value = fileIdPart;
                       }
                     }
-                    // Handle prototype URLs
                     else if (value.includes('figma.com/proto/')) {
                       const urlParts = value.split('figma.com/proto/');
                       if (urlParts.length > 1) {
@@ -448,9 +425,7 @@ const ChatPage = () => {
                         value = fileIdPart;
                       }
                     }
-                    // Handle embed URLs
                     else if (value.includes('embed.figma.com')) {
-                      // Extract the file ID from the embed URL
                       const match = value.match(/file\/([a-zA-Z0-9]+)/);
                       if (match && match[1]) {
                         console.log('Extracted file ID from embed URL:', match[1]);
@@ -460,7 +435,7 @@ const ChatPage = () => {
                   } catch (error) {
                     console.error("Error parsing Figma URL:", error);
                   }
-                  
+
                   console.log('Final file ID:', value);
                   setFileId(value);
                   if (value) {
@@ -487,7 +462,6 @@ const ChatPage = () => {
               Find this in your Figma file URL: figma.com/file/
               <span className="text-purple-400">FILE_ID</span>/... or paste the full URL
             </p>
-            {/* Configuration Status */}
             <div className="mt-3 flex items-center justify-between text-xs">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
@@ -518,7 +492,6 @@ const ChatPage = () => {
             </div>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 ? (
               <div className="flex items-center justify-center h-full">
@@ -533,16 +506,14 @@ const ChatPage = () => {
               messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex ${
-                    message.role === "user" ? "justify-end" : "justify-start"
-                  }`}
+                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"
+                    }`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                      message.role === "user"
+                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${message.role === "user"
                         ? "bg-white/10 text-white border border-white/20"
                         : "bg-white/5 text-gray-200 border border-white/10"
-                    }`}
+                      }`}
                   >
                     {message.platform && (
                       <div className="flex items-center gap-1.5 mb-2">
@@ -607,7 +578,6 @@ const ChatPage = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
           <div className="p-4 border-t border-white/10">
             {selectedPlatform && (
               <div className="mb-3 flex items-center gap-2">
@@ -672,9 +642,7 @@ const ChatPage = () => {
           </div>
         </div>
 
-        {/* Right Panel - Canvas */}
         <div className="flex-1 flex flex-col relative z-10">
-          {/* Canvas Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/20 backdrop-blur-sm">
             <div className="flex items-center gap-2">
               {!sidebarOpen && (
@@ -700,11 +668,10 @@ const ChatPage = () => {
             </button>
           </div>
 
-          {/* Canvas Content */}
           <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-900/50 to-black/50">
             {selectedPlatform === "figma" && fileId ? (
-              <FigmaEmbed 
-                fileId={fileId} 
+              <FigmaEmbed
+                fileId={fileId}
               />
             ) : messages.length === 0 || !messages[messages.length - 1]?.code ? (
               <div className="h-full flex items-center justify-center">

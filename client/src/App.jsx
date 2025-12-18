@@ -17,8 +17,7 @@ function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-        
-        {/* Global token expiration alert */}
+
         <TokenExpirationAlert platform="figma" />
       </div>
     </Router>

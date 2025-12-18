@@ -1,8 +1,9 @@
 import { StateGraph, END, START } from "@langchain/langgraph";
-import { BaseMessage } from "@langchain/core/messages";
+import { BaseMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { mcp } from "@/mcp";
+import { HfInference } from "@huggingface/inference";
+import { ChatHuggingFace } from "@langchain/huggingface";
 
-// LangGraph State
 export interface WorkflowState {
   taskId: string;
   prompt: string;
@@ -20,7 +21,6 @@ export interface WorkflowState {
   messages: BaseMessage[];
 }
 
-// Event emitter for real-time updates
 export interface WorkflowEvent {
   type: "planning" | "executing" | "completed" | "failed";
   taskId: string;
@@ -53,37 +53,84 @@ export class WorkflowEventEmitter {
 
 export const workflowEmitter = new WorkflowEventEmitter();
 
-// Planner Node
 async function plannerNode(
   state: WorkflowState,
 ): Promise<Partial<WorkflowState>> {
   workflowEmitter.emit({
     type: "planning",
     taskId: state.taskId,
-    message: "Analyzing prompt and creating execution plan...",
+    message: "Analyzing prompt and creating execution plan with Gemma...",
   });
 
-  // Mock LLM planning - replace with actual LLM call
-  const steps = [
-    { tool: "createRectangle", params: { width: 200, height: 50, color: "#3B82F6" } },
-    { tool: "createText", params: { content: "Sign Up", fontSize: 18 } },
-    { tool: "groupElements", params: { elementIds: ["rect-id", "text-id"] } },
-  ];
+  try {
+    const hf = new HfInference(process.env.HUGGINGFACEHUB_API_TOKEN);
+    const model = new ChatHuggingFace({
+      llm: hf,
+      model: "google/gemma-1.1-7b-it",
+    });
 
-  workflowEmitter.emit({
-    type: "planning",
-    taskId: state.taskId,
-    message: `Plan created with ${steps.length} steps`,
-    data: { steps },
-  });
+    const systemPrompt = `You are an expert design automation agent. Your goal is to convert a user's natural language request into a sequence of specific tool calls.
 
-  return {
-    steps,
-    currentStep: 0,
-  };
+Available Tools:
+- createRectangle(width: number, height: number, color: string, x?: number, y?: number)
+- createText(content: string, fontSize: number, x?: number, y?: number)
+- groupElements(elementIds: string[])
+
+Rules:
+1. You must output ONLY a valid JSON array of steps.
+2. No markdown formatting, no explanations.
+3. Each step must have 'tool' and 'params'.
+4. For colors, use hex codes.
+
+Example Output:
+[
+  { "tool": "createRectangle", "params": { "width": 100, "height": 100, "color": "#FF0000" } },
+  { "tool": "createText", "params": { "content": "Hello", "fontSize": 16 } }
+]`;
+
+    const response = await model.invoke([
+      new SystemMessage(systemPrompt),
+      new HumanMessage(state.prompt),
+    ]);
+
+    let content = response.content as string;
+    content = content.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    const steps = JSON.parse(content);
+
+    workflowEmitter.emit({
+      type: "planning",
+      taskId: state.taskId,
+      message: `Gemma created a plan with ${steps.length} steps`,
+      data: { steps },
+    });
+
+    return {
+      steps,
+      currentStep: 0,
+    };
+  } catch (error) {
+    console.error("Planning failed:", error);
+
+    workflowEmitter.emit({
+      type: "planning",
+      taskId: state.taskId,
+      message: "AI planning failed, falling back to default plan",
+      error: (error as Error).message
+    });
+
+    const fallbackSteps = [
+      { tool: "createRectangle", params: { width: 200, height: 50, color: "#3B82F6" } },
+      { tool: "createText", params: { content: "Error: AI Failed", fontSize: 18 } },
+    ];
+
+    return {
+      steps: fallbackSteps,
+      currentStep: 0,
+    };
+  }
 }
 
-// Executor Node
 async function executorNode(
   state: WorkflowState,
 ): Promise<Partial<WorkflowState>> {
@@ -135,7 +182,6 @@ async function executorNode(
   }
 }
 
-// Finalizer Node
 async function finalizerNode(
   state: WorkflowState,
 ): Promise<Partial<WorkflowState>> {
@@ -154,12 +200,10 @@ async function finalizerNode(
   return { finalMessage };
 }
 
-// Conditional edges
 function shouldContinue(state: WorkflowState): string {
   return state.currentStep < state.steps.length ? "execute" : "finalize";
 }
 
-// Create the workflow graph
 export function createWorkflow() {
   const workflow = new StateGraph<WorkflowState>({
     channels: {
@@ -187,12 +231,10 @@ export function createWorkflow() {
     },
   });
 
-  // Add nodes
   workflow.addNode("planner", plannerNode);
   workflow.addNode("executor", executorNode);
   workflow.addNode("finalizer", finalizerNode);
 
-  // Add edges
   workflow.addEdge(START, "planner");
   workflow.addConditionalEdges("planner", shouldContinue, {
     execute: "executor",
@@ -207,7 +249,6 @@ export function createWorkflow() {
   return workflow.compile();
 }
 
-// Legacy function for backward compatibility
 export async function runOrchestration(opts: {
   taskId: string;
   prompt: string;

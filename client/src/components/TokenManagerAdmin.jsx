@@ -1,32 +1,23 @@
 import React, { useState } from 'react';
-// Import token manager singleton
 import { tokenManager } from '../utils/tokenManager';
-// Import token API utilities
 import { saveTokenToEnv } from '../utils/tokenApi';
 
-/**
- * TokenManager - Admin component for token management
- * For development and testing only - not intended for production use
- */
 export default function TokenManagerAdmin() {
   const [apiKey, setApiKey] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Handle resetting stored tokens
+
   const handleResetTokens = () => {
     try {
-      // Check if tokenManager exists
       if (!tokenManager || typeof tokenManager.resetStoredCredentials !== 'function') {
         throw new Error('Token manager not properly initialized');
       }
-      
+
       tokenManager.resetStoredCredentials();
       setMessage('All tokens have been cleared from local storage');
       setError('');
-      
-      // Reload page after 2 seconds to ensure everything is reset
+
       setTimeout(() => {
         window.location.reload();
       }, 2000);
@@ -36,48 +27,45 @@ export default function TokenManagerAdmin() {
       setMessage('');
     }
   };
-  
-  // Handle saving token to .env file
+
   const handleSaveToEnv = async () => {
     if (!apiKey) {
       setError('Admin API key is required');
       return;
     }
-    
+
     setIsLoading(true);
     setError('');
     setMessage('');
-    
+
     try {
-      // Check if saveTokenToEnv function exists
       if (typeof saveTokenToEnv !== 'function') {
         throw new Error('Token API utilities not properly imported');
       }
-      
-      // Get tokens from localStorage
+
       const figmaToken = localStorage.getItem('superdesign_figma_token');
       const framerToken = localStorage.getItem('superdesign_framer_token');
-      
+
       if (!figmaToken && !framerToken) {
         setError('No tokens found in localStorage');
         setIsLoading(false);
         return;
       }
-      
+
       let savedCount = 0;
-      
+
       if (figmaToken) {
         await saveTokenToEnv('figma', figmaToken, null, apiKey);
         savedCount++;
         console.log('Figma token saved to .env');
       }
-      
+
       if (framerToken) {
         await saveTokenToEnv('framer', framerToken, null, apiKey);
         savedCount++;
         console.log('Framer token saved to .env');
       }
-      
+
       setMessage(`${savedCount} tokens successfully saved to server .env file`);
     } catch (err) {
       console.error('Token save error:', err);
@@ -86,22 +74,22 @@ export default function TokenManagerAdmin() {
       setIsLoading(false);
     }
   };
-  
+
   return (
     <div className="token-manager-admin">
-      
+
       <div className="admin-actions">
         <div className="action-group">
           <h4>Reset Tokens</h4>
           <p>Clear all stored tokens from localStorage. Use this when changing client ID/secret.</p>
-          <button 
+          <button
             className="reset-button"
             onClick={handleResetTokens}
           >
             Reset Cached Tokens
           </button>
         </div>
-        
+
         <div className="action-group">
           <h4>Save Tokens to Server</h4>
           <p>Save current tokens to server .env file (requires admin API key)</p>
@@ -123,10 +111,10 @@ export default function TokenManagerAdmin() {
           </div>
         </div>
       </div>
-      
+
       {message && <div className="success-message">{message}</div>}
       {error && <div className="error-message">{error}</div>}
-      
+
       <style jsx>{`
         .token-manager-admin {
           background-color: rgba(15, 23, 42, 0.3);

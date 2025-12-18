@@ -14,15 +14,14 @@ export interface AuthenticatedUser {
 export function createTRPCContext(
   opts:
     | {
-        req?: Request;
-        res?: Response;
-      }
+      req?: Request;
+      res?: Response;
+    }
     | {
-        req?: IncomingMessage;
-        res?: WebSocket;
-      },
+      req?: IncomingMessage;
+      res?: WebSocket;
+    },
 ) {
-  // Extract authorization header for HTTP requests
   let accessToken: string | undefined;
   let user: AuthenticatedUser | null = null;
 
@@ -46,7 +45,6 @@ export function createTRPCContext(
             refreshToken: decoded.refreshToken,
           };
 
-          // Keep legacy accessToken for backward compatibility
           accessToken = decoded.accessToken;
         }
       }

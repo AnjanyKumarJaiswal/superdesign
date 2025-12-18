@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { useTokenExpiration } from '../utils/tokenManager';
 
-/**
- * TokenExpirationAlert - Shows warnings when tokens are about to expire
- * and handles re-authentication flow
- */
 export default function TokenExpirationAlert({ platform = 'figma' }) {
   const [expiryStatus, setExpiryStatus] = useState({
     isExpiring: false,
@@ -12,7 +8,6 @@ export default function TokenExpirationAlert({ platform = 'figma' }) {
     isExpired: false
   });
 
-  // Handle token expiration
   const handleExpiration = (expiredPlatform) => {
     if (expiredPlatform === platform) {
       setExpiryStatus({
@@ -21,15 +16,12 @@ export default function TokenExpirationAlert({ platform = 'figma' }) {
         isExpired: true
       });
 
-      // Show expired message for 3 seconds before redirecting
       setTimeout(() => {
-        // Redirect to login
         window.location.href = `/auth/${platform}?redirect=${encodeURIComponent(window.location.pathname)}`;
       }, 3000);
     }
   };
 
-  // Handle token expiring soon warning
   const handleExpiringSoon = (expiringPlatform, remainingSeconds) => {
     if (expiringPlatform === platform) {
       setExpiryStatus({
@@ -40,16 +32,14 @@ export default function TokenExpirationAlert({ platform = 'figma' }) {
     }
   };
 
-  // Register for token expiration events
   useTokenExpiration(handleExpiration, handleExpiringSoon);
 
-  // Format remaining time for display
   const formatRemainingTime = (seconds) => {
     if (!seconds && seconds !== 0) return '';
-    
+
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    
+
     if (minutes === 0) {
       return `${remainingSeconds}s`;
     } else {
@@ -57,7 +47,6 @@ export default function TokenExpirationAlert({ platform = 'figma' }) {
     }
   };
 
-  // Don't render anything if no expiration warnings
   if (!expiryStatus.isExpiring && !expiryStatus.isExpired) {
     return null;
   }
@@ -77,7 +66,7 @@ export default function TokenExpirationAlert({ platform = 'figma' }) {
           <span className="alert-message">
             Your {platform} session expires in {formatRemainingTime(expiryStatus.remainingTime)}
           </span>
-          <button 
+          <button
             className="refresh-button"
             onClick={() => window.location.href = `/auth/${platform}?redirect=${encodeURIComponent(window.location.pathname)}`}
           >

@@ -49,11 +49,7 @@ export class FramerProvider extends EventEmitter implements MCPProvider {
     }
   }
 
-  /**
-   * Shutdown method for cleanup (placeholder for future MCP client)
-   */
   async shutdown(): Promise<void> {
     console.log("[FramerProvider] Shutdown called");
-    // Future: Add MCP client cleanup here
   }
 }

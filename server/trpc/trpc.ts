@@ -1,10 +1,8 @@
-// server/trpc/trpc.ts
 import { initTRPC, TRPCError } from "@trpc/server";
 import { type TRPCContext } from "./context";
 
 const t = initTRPC.context<TRPCContext>().create();
 
-// Middleware to enforce authentication
 const isAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.user) {
     throw new TRPCError({
@@ -16,7 +14,7 @@ const isAuthed = t.middleware(({ ctx, next }) => {
   return next({
     ctx: {
       ...ctx,
-      user: ctx.user, // user is now guaranteed to be defined
+      user: ctx.user,
     },
   });
 });

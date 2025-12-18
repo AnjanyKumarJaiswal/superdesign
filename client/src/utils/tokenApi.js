@@ -1,15 +1,3 @@
-/**
- * API functions for token management
- */
-
-/**
- * Save OAuth tokens to the server's .env file
- * @param {string} platform - The platform (figma, framer)
- * @param {string} accessToken - OAuth access token
- * @param {string} refreshToken - OAuth refresh token
- * @param {string} apiKey - Admin API key for security
- * @returns {Promise<{status: string, message: string}>}
- */
 export async function saveTokenToEnv(platform, accessToken, refreshToken, apiKey) {
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -39,17 +27,6 @@ export async function saveTokenToEnv(platform, accessToken, refreshToken, apiKey
   }
 }
 
-/**
- * Check token validity with the server
- * @param {string} token - JWT token
- * @returns {Promise<{
- *   authenticated: boolean,
- *   platform: string,
- *   valid: boolean,
- *   expiresIn: number,
- *   requiresReauth: boolean
- * }>}
- */
 export async function checkTokenStatus(token) {
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 

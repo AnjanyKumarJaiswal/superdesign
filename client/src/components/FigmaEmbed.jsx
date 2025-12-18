@@ -6,76 +6,71 @@ import { EmbedDebugger } from './EmbedDebugger';
 const FigmaEmbed = ({ fileId = '' }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [key, setKey] = useState(0); // Used for forcing iframe refresh
+  const [key, setKey] = useState(0);
   const iframeRef = useRef(null);
-  
-  // Log the file ID for debugging
-  console.log('FigmaEmbed received fileId:', typeof fileId, fileId);
 
-  // Validate the file ID early
+  console.log('FigmaEmbed received fileId:', fileId);
+
   const fileIdValid = !!fileId && typeof fileId === 'string' && fileId.trim().length > 0;
-  
-  // Query to get embed URL
+
   const embedQuery = trpc.getFigmaEmbed.useQuery(
     { fileId },
-    { 
+    {
       enabled: fileIdValid,
       retry: 2,
       retryDelay: 1000,
       onError: (err) => {
-        console.error('FigmaEmbed error fetching URL:', err);
+        console.error('FigmaEmbed error:', err);
         setError(err.message || 'Failed to load Figma design');
         setIsLoading(false);
       },
       onSuccess: (data) => {
-        console.log('FigmaEmbed got response:', data);
-        
-        // Handle error responses from the API
+        console.log('FigmaEmbed response:', data);
+
         if (data.error) {
-          console.error('FigmaEmbed server returned error:', data.error);
+          console.error('Server error:', data.error);
           setError(data.error);
           setIsLoading(false);
         } else if (!data.embedUrl) {
-          console.error('FigmaEmbed server returned no embed URL');
+          console.error('No embed URL returned');
           setError('Server returned an empty embed URL');
           setIsLoading(false);
         }
       }
     }
   );
-  
-  // Handle loading state with delay
+
+  console.log('Figma Embed URL:', embedQuery.data);
+
   useEffect(() => {
     let timer;
-    
+
     if (embedQuery.data?.embedUrl) {
-      // Log the embed URL to see what's being passed to the iframe
       console.log('Figma Embed URL:', embedQuery.data.embedUrl);
-      
-      // Add a minimum loading time for better UX
+
       timer = setTimeout(() => {
         if (!error) {
           setIsLoading(false);
         }
-      }, 3000); // 3 second minimum loading time
+      }, 1500);
     }
-    
+
     return () => {
       if (timer) clearTimeout(timer);
     };
   }, [embedQuery.data, error]);
-  
-  // Handle iframe load event
+
   const handleIframeLoad = () => {
+    console.log('Iframe loaded successfully');
     setIsLoading(false);
   };
-  
-  // Handle iframe error
+
   const handleIframeError = () => {
+    console.error('Iframe failed to load');
     setError('Failed to load Figma design');
     setIsLoading(false);
   };
-  
+
   if (!fileId) {
     return (
       <div className="h-full flex items-center justify-center bg-gradient-to-br from-gray-900/50 to-black/50">
@@ -89,7 +84,7 @@ const FigmaEmbed = ({ fileId = '' }) => {
       </div>
     );
   }
-  
+
   if (error) {
     return (
       <div className="h-full flex items-center justify-center bg-gradient-to-br from-gray-900/50 to-black/50">
@@ -98,13 +93,13 @@ const FigmaEmbed = ({ fileId = '' }) => {
           <h2 className="text-2xl font-bold text-white mb-2">Error Loading Design</h2>
           <p className="text-gray-400 mb-4">{error}</p>
           <p className="text-sm text-gray-500 mb-6">
-            Make sure you're using a valid Figma file ID and have proper access permissions.
+            Make sure the Figma file is accessible and you're logged into Figma.
           </p>
           <button
             onClick={() => {
               setError(null);
               setIsLoading(true);
-              setKey(prevKey => prevKey + 1); // Force iframe refresh
+              setKey(prevKey => prevKey + 1);
               embedQuery.refetch();
             }}
             className="flex items-center gap-2 mx-auto px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/40 rounded-lg text-white text-sm transition-colors"
@@ -116,8 +111,7 @@ const FigmaEmbed = ({ fileId = '' }) => {
       </div>
     );
   }
-  
-  // Function to force reload the iframe
+
   const reloadIframe = () => {
     setIsLoading(true);
     setKey(prevKey => prevKey + 1);
@@ -125,7 +119,6 @@ const FigmaEmbed = ({ fileId = '' }) => {
 
   return (
     <div className="relative w-full h-full">
-      {/* Loading overlay */}
       {isLoading && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/90">
           <div className="mb-4 relative">
@@ -134,38 +127,34 @@ const FigmaEmbed = ({ fileId = '' }) => {
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Loading Figma Design</h3>
           <p className="text-gray-400 text-center max-w-sm">
-            Loading your Figma design. This may take a moment depending on the size and complexity.
+            Loading your Figma design...
           </p>
-          
+
           <div className="mt-8 w-64 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-            <div className="h-full bg-purple-500 rounded-full animate-pulse" style={{width: '40%'}}></div>
+            <div className="h-full bg-purple-500 rounded-full animate-pulse" style={{ width: '40%' }}></div>
           </div>
         </div>
       )}
-      
-      {/* Embed debugger tool */}
+
       {embedQuery.data?.embedUrl && (
-        <EmbedDebugger 
-          embedUrl={embedQuery.data.embedUrl} 
-          onReload={reloadIframe} 
+        <EmbedDebugger
+          embedUrl={embedQuery.data.embedUrl}
+          onReload={reloadIframe}
         />
       )}
-      
-      {/* Figma iframe */}
+
       {embedQuery.data?.embedUrl && (
-        <>
-          {console.log('Rendering iframe with URL:', embedQuery.data.embedUrl)}
-          <iframe
-            key={key} // Use key to force re-render when needed
-            ref={iframeRef}
-            className="w-full h-full border-0"
-            src={embedQuery.data.embedUrl}
-            allowFullScreen
-            onLoad={handleIframeLoad}
-            onError={handleIframeError}
-            title="Figma Design"
-          />
-        </>
+        <iframe
+          key={key}
+          ref={iframeRef}
+          className="w-full h-full border-0"
+          src={embedQuery.data?.embedUrl}
+          allowFullScreen
+          allow="clipboard-write"
+          onLoad={handleIframeLoad}
+          onError={handleIframeError}
+          title="Figma Design"
+        />
       )}
     </div>
   );
