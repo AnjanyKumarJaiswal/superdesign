@@ -4,10 +4,9 @@ import { MCPClient } from "./mcp/mcpclient";
 async function testFigmaMCP() {
   console.log("🧪 Testing Figma MCP Integration\n");
   console.log("=".repeat(60));
-  
-  // Get token from environment
+
   const accessToken = process.env.FIGMA_TEST_TOKEN;
-  
+
   if (!accessToken) {
     console.error("Error: FIGMA_TEST_TOKEN not set in environment");
     console.log("\nSet your token:");
@@ -15,18 +14,17 @@ async function testFigmaMCP() {
     console.log("   or add to .env file");
     process.exit(1);
   }
-  
+
   console.log("✅ Access token found");
   console.log("🔗 MCP Server: https://mcp.figma.com/mcp\n");
-  
-  // Test 1: List available tools
+
   console.log("📋 Test 1: List Available MCP Tools");
   console.log("-".repeat(60));
-  
+
   try {
     const mcpClient = new MCPClient("https://mcp.figma.com/mcp");
     const toolsResponse = await mcpClient.listTools(accessToken);
-    
+
     if ('error' in toolsResponse) {
       console.error("❌ Error listing tools:", toolsResponse.error);
     } else {
@@ -36,38 +34,34 @@ async function testFigmaMCP() {
   } catch (error) {
     console.error("❌ Exception:", error instanceof Error ? error.message : error);
   }
-  
+
   console.log("\n");
-  
-  // Test 2: Test FigmaProvider initialization
+
   console.log("🔧 Test 2: FigmaProvider Initialization");
   console.log("-".repeat(60));
-  
+
   try {
     const figmaProvider = new FigmaProvider();
     console.log("✅ FigmaProvider initialized successfully");
-    
-    // Try to get available tools
+
     const tools = await figmaProvider.getAvailableTools(accessToken);
     console.log("📦 Available tools:", JSON.stringify(tools, null, 2));
   } catch (error) {
     console.error("❌ Exception:", error instanceof Error ? error.message : error);
   }
-  
+
   console.log("\n");
-  
-  // Test 3: Test a simple MCP call (if file ID provided)
+
   const testFileId = process.env.FIGMA_TEST_FILE_ID;
-  
+
   if (testFileId) {
     console.log("🎨 Test 3: Test MCP Tool Call");
     console.log("-".repeat(60));
     console.log(`📁 File ID: ${testFileId}`);
-    
+
     try {
       const figmaProvider = new FigmaProvider();
-      
-      // Try to create a rectangle
+
       const result = await figmaProvider.runTask({
         id: "test-1",
         provider: "figma",
@@ -82,9 +76,9 @@ async function testFigmaMCP() {
           accessToken: accessToken
         }
       });
-      
+
       console.log("📊 Result:", JSON.stringify(result, null, 2));
-      
+
       if (result.status === "completed") {
         console.log("✅ Rectangle created successfully!");
       } else {
@@ -97,10 +91,9 @@ async function testFigmaMCP() {
     console.log("⏭️  Test 3: Skipped (no FIGMA_TEST_FILE_ID provided)");
     console.log("💡 To test MCP tool calls, set FIGMA_TEST_FILE_ID in environment");
   }
-  
+
   console.log("\n" + "=".repeat(60));
   console.log("🏁 Tests completed\n");
 }
 
-// Run tests
 testFigmaMCP().catch(console.error);

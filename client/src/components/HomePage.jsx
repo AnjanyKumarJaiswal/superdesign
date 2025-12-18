@@ -26,7 +26,6 @@ const HomePage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Show content after loading completes
     if (!loading) {
       setTimeout(() => {
         setShowContent(true);
@@ -47,7 +46,6 @@ const HomePage = () => {
     let particleData = [];
     const clock = new THREE.Clock();
 
-    // Initialize Three.js scene
     const init = () => {
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(
@@ -282,10 +280,8 @@ const HomePage = () => {
 
   return (
     <>
-      {/* Loading Screen */}
       {loading && <CircularLoader onLoadComplete={() => setLoading(false)} />}
 
-      {/* Transition Loading Screen */}
       {transitioning && (
         <ArrowLoader duration={2000} onComplete={handleTransitionComplete} />
       )}
@@ -298,19 +294,15 @@ const HomePage = () => {
           overflow: "hidden",
         }}
       >
-        {/* Three.js Canvas Background */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 z-0"
           style={{ width: "100%", height: "100%" }}
         />
 
-        {/* Rotating Carousel on Left */}
         {!loading && <RotatingCarousel />}
 
-        {/* Content */}
         <div className="relative z-10 min-h-screen flex flex-col">
-          {/* Navigation */}
           <nav className="px-6 py-4 md:px-12 md:py-6 backdrop-blur-md bg-black/30">
             <div className="flex justify-between items-center max-w-7xl mx-auto">
               <div className="flex items-center space-x-3">
@@ -363,7 +355,6 @@ const HomePage = () => {
             </div>
           </nav>
 
-          {/* Hero Section */}
           <div className="flex-1 flex items-center justify-center px-6 md:px-12">
             <div className="text-center max-w-4xl mx-auto">
               {showContent && (
@@ -403,7 +394,6 @@ const HomePage = () => {
                     />
                   </div>
 
-                  {/* CTA Button */}
                   <div
                     className="mt-10 flex items-center justify-center mb-16"
                     style={{
@@ -428,7 +418,6 @@ const HomePage = () => {
             </div>
           </div>
 
-          {/* Footer */}
           <div className="pb-8 pt-4">
             <div className="flex justify-center space-x-8 mb-6">
               <a
@@ -468,8 +457,7 @@ const HomePage = () => {
                 </svg>
               </a>
             </div>
-            
-            {/* Admin Buttons */}
+
             {showContent && (
               <div className="mx-auto text-center mb-4 flex justify-center gap-4"
                 style={{
@@ -477,17 +465,17 @@ const HomePage = () => {
                   opacity: 0,
                 }}
               >
-                <button 
+                <button
                   onClick={() => {
                     setShowAdminPanel(prev => !prev);
                     if (showCacheCleaner) setShowCacheCleaner(false);
-                  }} 
+                  }}
                   className={`text-white/40 hover:text-white/70 transition-all duration-300 text-xs font-light py-1 px-3 rounded-full border border-white/10 bg-black/20 backdrop-blur-sm ${showAdminPanel ? 'bg-black/40' : ''}`}
                 >
                   {showAdminPanel ? "Hide Admin Panel" : "Show Admin Panel"}
                 </button>
-                
-                <button 
+
+                <button
                   onClick={() => {
                     setShowCacheCleaner(prev => !prev);
                     if (showAdminPanel) setShowAdminPanel(false);
@@ -498,8 +486,7 @@ const HomePage = () => {
                 </button>
               </div>
             )}
-            
-            {/* Token Manager Admin Panel */}
+
             {showContent && showAdminPanel && (
               <div className="mx-auto max-w-md mb-8 transition-all duration-500 opacity-90 hover:opacity-100"
                 style={{
@@ -512,18 +499,20 @@ const HomePage = () => {
                 </div>
               </div>
             )}
-            
-            {/* Cache Cleaner Panel */}
+
             {showContent && showCacheCleaner && (
               <div className="mx-auto max-w-md mb-8 transition-all duration-500 opacity-90 hover:opacity-100"
                 style={{
                   animation: "fadeSlideIn 0.5s ease-out forwards",
                 }}
               >
-                <CacheCleaner />
+                <div className="admin-panel-wrapper backdrop-blur-sm bg-black/20 border border-white/10 rounded-lg p-4">
+                  <h3 className="text-white text-center mb-4 text-lg font-medium">Cache Cleaner</h3>
+                  <CacheCleaner />
+                </div>
               </div>
             )}
-            
+
             <div className="text-center">
               <p className="text-white/50 text-xs font-medium">
                 © 2024 SuperDesign. Designed in California.
@@ -577,7 +566,6 @@ const HomePage = () => {
           }
         }
 
-        /* Shimmer Button Styles */
         .shimmer-button {
           --cut: 0.1em;
           --active: 0;

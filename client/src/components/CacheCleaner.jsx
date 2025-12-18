@@ -2,33 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { cleanAllCache, cleanFigmaCredentials, checkCachedCredentials } from '../utils/cacheCleaner';
 import { cleanOAuthCache } from '../utils/auth';
 
-/**
- * Cache Cleaner component
- * Provides UI for cleaning application cache and resolving authentication issues
- */
 export default function CacheCleaner() {
   const [cacheStatus, setCacheStatus] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Check cache status on mount
+
   useEffect(() => {
     const status = checkCachedCredentials();
     setCacheStatus(status);
   }, []);
-  
-  // Handle complete cache cleaning
+
   const handleCleanAllCache = () => {
     setIsLoading(true);
     setMessage('');
     setError('');
-    
+
     try {
-      // Use both cleaners for a more thorough cleaning
-      const results = cleanAllCache(false); // Don't reload automatically
-      cleanOAuthCache(); // Make sure we clean OAuth data too
-      
+      const results = cleanAllCache(false);
+      cleanOAuthCache();
+
       if (results.success) {
         setMessage('All application cache and credentials cleared successfully. Click "Reload Page" to apply changes.');
         setCacheStatus(checkCachedCredentials());
@@ -42,18 +35,16 @@ export default function CacheCleaner() {
       setIsLoading(false);
     }
   };
-  
-  // Handle Figma credentials cleaning
+
   const handleCleanFigmaCredentials = () => {
     setIsLoading(true);
     setMessage('');
     setError('');
-    
+
     try {
-      // Use both the new auth utility and the cache cleaner to ensure thorough cleaning
       const success1 = cleanFigmaCredentials();
       const success2 = cleanOAuthCache();
-      
+
       if (success1 && success2) {
         setMessage('OAuth credentials cleared successfully. Click "Reload Page" to apply changes.');
         setCacheStatus(checkCachedCredentials());
@@ -67,17 +58,16 @@ export default function CacheCleaner() {
       setIsLoading(false);
     }
   };
-  
-  // Handle page reload
+
   const handleReload = () => {
     window.location.reload();
   };
-  
+
   return (
     <div className="cache-cleaner">
       <div className="cache-cleaner-content">
         <h3 className="title">OAuth Credentials Cleaner</h3>
-        
+
         {cacheStatus && (
           <div className="status-section">
             <h4>Current Cache Status:</h4>
@@ -88,21 +78,21 @@ export default function CacheCleaner() {
                   {cacheStatus.figmaToken ? 'Present' : 'Not Found'}
                 </span>
               </div>
-              
+
               <div className="status-item">
                 <span className="label">Credentials Hash:</span>
                 <span className={`value ${cacheStatus.credentialsHash ? 'red' : 'green'}`}>
                   {cacheStatus.credentialsHash ? cacheStatus.credentialsHash : 'Not Found'}
                 </span>
               </div>
-              
+
               <div className="status-item">
                 <span className="label">Last Login:</span>
                 <span className="value">
                   {cacheStatus.lastLogin ? new Date(parseInt(cacheStatus.lastLogin)).toLocaleString() : 'Never'}
                 </span>
               </div>
-              
+
               {cacheStatus.otherFigmaItems.length > 0 && (
                 <div className="status-item">
                   <span className="label">Other Items:</span>
@@ -112,36 +102,36 @@ export default function CacheCleaner() {
             </div>
           </div>
         )}
-        
+
         <div className="actions">
-          <button 
+          <button
             className="clean-figma-button"
             onClick={handleCleanFigmaCredentials}
             disabled={isLoading}
           >
             {isLoading ? 'Cleaning...' : 'Fix OAuth Errors'}
           </button>
-          
-          <button 
+
+          <button
             className="clean-all-button"
             onClick={handleCleanAllCache}
             disabled={isLoading}
           >
             {isLoading ? 'Cleaning...' : 'Reset All Storage'}
           </button>
-          
-          <button 
+
+          <button
             className="reload-button"
             onClick={handleReload}
           >
             Reload Page
           </button>
         </div>
-        
+
         {message && <div className="success-message">{message}</div>}
         {error && <div className="error-message">{error}</div>}
       </div>
-      
+
       <style jsx>{`
         .cache-cleaner {
           background-color: rgba(15, 23, 42, 0.4);

@@ -1,4 +1,3 @@
-// Test file to verify @ alias works
 import { mcp } from "@/mcp";
 import { createWorkflow } from "@/orchestrator/orchestrator";
 import { appRouter } from "@/trpc/router";

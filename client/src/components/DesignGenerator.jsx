@@ -3,16 +3,11 @@ import { trpc } from "../utils/trpc";
 import { isAuthenticated, getCurrentUser } from "../utils/auth";
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
 
-/**
- * Example component demonstrating authenticated design generation
- * This shows how to use tRPC with authentication
- */
 const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
   const [taskId, setTaskId] = useState(null);
   const authenticated = isAuthenticated();
   const user = getCurrentUser();
 
-  // tRPC mutation with authentication
   const generateDesign = trpc.generateDesign.useMutation({
     onSuccess: (data) => {
       console.log("Design generation started:", data);
@@ -26,12 +21,11 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
     },
   });
 
-  // Query job status (optional)
   const jobStatus = trpc.getJobStatus.useQuery(
     { jobId: taskId },
     {
       enabled: !!taskId,
-      refetchInterval: 2000, // Poll every 2 seconds
+      refetchInterval: 2000,
     }
   );
 
@@ -61,13 +55,11 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
 
   return (
     <div className="space-y-4">
-      {/* User Info */}
       <div className="flex items-center gap-2 text-sm text-gray-400">
         <span>Logged in as:</span>
         <span className="text-white font-medium">{user?.platform} user</span>
       </div>
 
-      {/* Generate Button */}
       <button
         onClick={handleGenerate}
         disabled={generateDesign.isLoading}
@@ -83,7 +75,6 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
         )}
       </button>
 
-      {/* Error Display */}
       {generateDesign.error && (
         <div className="flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
           <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
@@ -98,7 +89,6 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
         </div>
       )}
 
-      {/* Job Status Display */}
       {taskId && jobStatus.data && (
         <div className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
           <div className="flex items-center gap-3">
@@ -123,7 +113,6 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
             </div>
           </div>
 
-          {/* Task ID */}
           <div className="mt-3 pt-3 border-t border-white/10">
             <p className="text-gray-500 text-xs">
               Task ID: <span className="text-gray-400">{taskId}</span>
@@ -132,7 +121,6 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
         </div>
       )}
 
-      {/* Success Message */}
       {jobStatus.data?.status === "completed" && (
         <div className="flex items-start gap-3 px-4 py-3 bg-green-500/10 border border-green-500/30 rounded-xl">
           <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />

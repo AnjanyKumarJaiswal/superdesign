@@ -1,32 +1,24 @@
 import { useState } from "react";
 import { Figma } from "lucide-react";
 
-/**
- * Component for manually entering a Figma file ID
- */
 const FileIdInput = ({ onSubmit }) => {
   const [fileId, setFileId] = useState(() => localStorage.getItem("figma_file_id") || "");
 
   const handleSubmit = () => {
     if (!fileId.trim()) return;
-    
-    // Store in localStorage
+
     localStorage.setItem("figma_file_id", fileId.trim());
-    
-    // Call the parent's onSubmit handler
+
     if (onSubmit) {
       onSubmit(fileId.trim());
     }
   };
 
-  // Extract file ID from URL if pasted
   const handleChange = (e) => {
     let value = e.target.value.trim();
     console.log('Original input:', value);
-    
-    // Check if it's a Figma URL and extract the file ID
+
     try {
-      // Handle file URLs
       if (value.includes('figma.com/file/')) {
         const urlParts = value.split('figma.com/file/');
         if (urlParts.length > 1) {
@@ -35,7 +27,6 @@ const FileIdInput = ({ onSubmit }) => {
           value = fileIdPart;
         }
       }
-      // Handle prototype URLs
       else if (value.includes('figma.com/proto/')) {
         const urlParts = value.split('figma.com/proto/');
         if (urlParts.length > 1) {
@@ -44,9 +35,7 @@ const FileIdInput = ({ onSubmit }) => {
           value = fileIdPart;
         }
       }
-      // Handle embed URLs
       else if (value.includes('embed.figma.com')) {
-        // Extract the file ID from the embed URL
         const match = value.match(/file\/([a-zA-Z0-9]+)/);
         if (match && match[1]) {
           console.log('Extracted file ID from embed URL:', match[1]);
@@ -56,7 +45,7 @@ const FileIdInput = ({ onSubmit }) => {
     } catch (error) {
       console.error("Error parsing Figma URL:", error);
     }
-    
+
     console.log('Final file ID:', value);
     setFileId(value);
   };

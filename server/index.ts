@@ -1,6 +1,5 @@
 import dotenv from "dotenv";
 
-// Load environment variables from .env file
 dotenv.config();
 
 import express from "express";
@@ -50,8 +49,8 @@ app.use((req, res, next) => {
 
   console.log(
     `${colors.dim}[${timestamp}]${colors.reset} ` +
-      `${methodColor}${colors.bright}${req.method}${colors.reset} ` +
-      `${colors.cyan}${req.path}${colors.reset}`,
+    `${methodColor}${colors.bright}${req.method}${colors.reset} ` +
+    `${colors.cyan}${req.path}${colors.reset}`,
   );
 
   res.on("finish", () => {
@@ -67,9 +66,9 @@ app.use((req, res, next) => {
 
     console.log(
       `${colors.dim}[${timestamp}]${colors.reset} ` +
-        `${statusColor}${res.statusCode}${colors.reset} ` +
-        `${colors.cyan}${req.path}${colors.reset} ` +
-        `${colors.dim}${duration}ms${colors.reset}`,
+      `${statusColor}${res.statusCode}${colors.reset} ` +
+      `${colors.cyan}${req.path}${colors.reset} ` +
+      `${colors.dim}${duration}ms${colors.reset}`,
     );
   });
 
@@ -102,48 +101,44 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Save token to .env file endpoint (requires admin API key)
 app.post("/auth/save-token", async (req, res) => {
   const { platform, accessToken, refreshToken, apiKey } = req.body;
-  
-  // Security check: require API key
+
   const adminApiKey = process.env.ADMIN_API_KEY;
   if (!adminApiKey || apiKey !== adminApiKey) {
-    return res.status(401).json({ 
-      error: "Unauthorized", 
-      message: "Invalid or missing API key" 
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Invalid or missing API key"
     });
   }
-  
+
   try {
-    // Save token to .env file
     const success = await saveTokenToEnv(platform, accessToken, refreshToken);
-    
+
     if (success) {
-      res.json({ 
-        status: "success", 
-        message: `Saved ${platform} token to .env file` 
+      res.json({
+        status: "success",
+        message: `Saved ${platform} token to .env file`
       });
     } else {
-      res.status(500).json({ 
-        error: "Failed", 
-        message: "Failed to save token to .env file" 
+      res.status(500).json({
+        error: "Failed",
+        message: "Failed to save token to .env file"
       });
     }
   } catch (error) {
     console.error("Error saving token to .env:", error);
-    res.status(500).json({ 
-      error: "Error", 
-      message: error instanceof Error ? error.message : "Unknown error" 
+    res.status(500).json({
+      error: "Error",
+      message: error instanceof Error ? error.message : "Unknown error"
     });
   }
 });
 
-// Token status endpoint
 app.get("/auth/token/status", (req, res) => {
   const authHeader = req.headers.authorization;
   const token = extractTokenFromHeader(authHeader);
-  
+
   if (!token) {
     return res.status(401).json({
       error: "Unauthorized",
@@ -151,7 +146,7 @@ app.get("/auth/token/status", (req, res) => {
       authenticated: false
     });
   }
-  
+
   const decoded = verifyToken(token);
   if (!decoded) {
     return res.status(401).json({
@@ -160,28 +155,25 @@ app.get("/auth/token/status", (req, res) => {
       authenticated: false
     });
   }
-  
-  // Check token validity in our expiration service
+
   const isValid = tokenExpirationService.isTokenValid(decoded.userId, decoded.platform);
   const remainingMs = isValid ? tokenExpirationService.getTimeRemaining(decoded.userId, decoded.platform) : 0;
-  
+
   return res.json({
     authenticated: true,
     platform: decoded.platform,
     userId: decoded.userId,
     valid: isValid,
-    expiresIn: Math.floor(remainingMs / 1000), // in seconds
+    expiresIn: Math.floor(remainingMs / 1000),
     requiresReauth: !isValid && decoded.platform === 'figma'
   });
 });
 
-// OAuth callback routes
 app.get("/auth/callback/:platform", async (req, res) => {
   const { platform } = req.params;
   const { code, state, error, error_description } = req.query;
   const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
-  // Handle OAuth errors
   if (error) {
     const errorMsg = error_description || error;
     console.error(`OAuth error for ${platform}:`, errorMsg);
@@ -203,16 +195,13 @@ app.get("/auth/callback/:platform", async (req, res) => {
   }
 
   try {
-    // Exchange authorization code for access token
     const tokenResponse = await oauthService.exchangeCodeForToken(
       platform,
       String(code),
     );
 
-    // Generate simple userId
     const userId = `${platform}-user-${Math.random().toString(36).slice(2, 10)}`;
 
-    // Create minimal user payload
     const userPayload: UserPayload = {
       userId,
       platform,
@@ -222,36 +211,30 @@ app.get("/auth/callback/:platform", async (req, res) => {
 
     const jwt = generateToken(userPayload);
 
-    // Register token with expiration service
-    // For Figma, use our configured expiry time; otherwise use the provider's expiry time
     const expiryTimeMs = platform === 'figma'
       ? (process.env.FIGMA_TOKEN_EXPIRY ? parseInt(process.env.FIGMA_TOKEN_EXPIRY, 10) * 1000 : 30 * 60 * 1000)
       : (tokenResponse.expiresIn || 3600) * 1000;
-    
+
     tokenExpirationService.registerToken(
       userId,
       platform,
       tokenResponse.accessToken,
       expiryTimeMs
     );
-    
-    // If SAVE_TOKENS_TO_ENV is enabled, save tokens to .env file
+
     if (process.env.SAVE_TOKENS_TO_ENV === 'true') {
       try {
         await saveTokenToEnv(
-          platform, 
-          tokenResponse.accessToken, 
+          platform,
+          tokenResponse.accessToken,
           tokenResponse.refreshToken
         );
         console.log(`Saved ${platform} tokens to .env file`);
       } catch (error) {
         console.error(`Failed to save ${platform} tokens to .env:`, error);
-        // Non-critical error, continue with authentication
       }
     }
 
-    // Redirect back to frontend with token
-    // Always include state parameter to help with client-side validation
     const redirectUrl = `${clientUrl}/auth/callback?token=${jwt}&platform=${platform}${state ? `&state=${state}` : ""}`;
     console.log(`Redirecting to client with token and state: ${state}`);
     res.redirect(redirectUrl);
@@ -265,7 +248,6 @@ app.get("/auth/callback/:platform", async (req, res) => {
   }
 });
 
-// Get OAuth authorization URL
 app.get("/auth/:platform", (req, res) => {
   const { platform } = req.params;
   const { state } = req.query;
@@ -275,15 +257,12 @@ app.get("/auth/:platform", (req, res) => {
   }
 
   try {
-    // Always pass through the state parameter from the client
     const authState = state ? String(state) : undefined;
-    
-    // Get authorization URL - pass state parameter directly
+
     const authUrl = oauthService.getAuthorizationUrl(platform, authState);
 
     console.log(`Redirecting to ${platform} OAuth authorization page with state: ${authState}`);
-    
-    // Redirect to OAuth provider
+
     res.redirect(authUrl);
   } catch (error) {
     console.error(`Error generating auth URL for ${platform}:`, error);
@@ -301,15 +280,15 @@ wss.on("connection", (ws, req) => {
   const timestamp = new Date().toLocaleTimeString();
   console.log(
     `${colors.dim}[${timestamp}]${colors.reset} ` +
-      `${colors.magenta}${colors.bright}WS CONNECTED${colors.reset} ` +
-      `${colors.dim}from ${req.socket.remoteAddress}${colors.reset}`,
+    `${colors.magenta}${colors.bright}WS CONNECTED${colors.reset} ` +
+    `${colors.dim}from ${req.socket.remoteAddress}${colors.reset}`,
   );
 
   ws.on("close", () => {
     const timestamp = new Date().toLocaleTimeString();
     console.log(
       `${colors.dim}[${timestamp}]${colors.reset} ` +
-        `${colors.yellow}WS DISCONNECTED${colors.reset}`,
+      `${colors.yellow}WS DISCONNECTED${colors.reset}`,
     );
   });
 
@@ -317,8 +296,8 @@ wss.on("connection", (ws, req) => {
     const timestamp = new Date().toLocaleTimeString();
     console.log(
       `${colors.dim}[${timestamp}]${colors.reset} ` +
-        `${colors.red}WS ERROR${colors.reset} ` +
-        `${error.message}`,
+      `${colors.red}WS ERROR${colors.reset} ` +
+      `${error.message}`,
     );
   });
 });
@@ -348,7 +327,6 @@ server.listen(PORT, () => {
   );
   console.log("=".repeat(60));
 
-  // Check OAuth configuration
   const figmaConfigured = !!(
     process.env.FIGMA_CLIENT_ID && process.env.FIGMA_CLIENT_SECRET
   );
@@ -375,7 +353,6 @@ server.listen(PORT, () => {
   console.log(`${colors.dim}Waiting for requests...${colors.reset}\n`);
 });
 
-// Graceful shutdown
 const shutdown = (signal: string) => {
   console.log(
     `\n${colors.yellow}${signal}  received, shutting down gracefully...${colors.reset}`,

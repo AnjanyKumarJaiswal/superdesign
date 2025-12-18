@@ -5,7 +5,6 @@ import { trpc, createTRPCClient } from "./utils/trpc";
 import "./index.css";
 import App from "./App.jsx";
 
-// Create query client
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -15,7 +14,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Create tRPC client
 const trpcClient = createTRPCClient();
 
 createRoot(document.getElementById("root")).render(

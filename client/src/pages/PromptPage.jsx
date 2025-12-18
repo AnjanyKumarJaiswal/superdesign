@@ -10,7 +10,7 @@ import FileIdInput from "../components/FileIdInput";
 const PromptPage = () => {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState(null); // "figma", "framer", or null for direct design
+  const [selectedPlatform, setSelectedPlatform] = useState(null);
   const [showContent, setShowContent] = useState(false);
   const [fileId, setFileId] = useState(() => localStorage.getItem("figma_file_id") || "");
   const [showFileIdInput, setShowFileIdInput] = useState(false);
@@ -21,29 +21,23 @@ const PromptPage = () => {
   const splitBottomRef = useRef(null);
 
   useEffect(() => {
-    // Trigger reveal animation on mount
     const timer = setTimeout(() => {
       setShowContent(true);
 
-      // Small delay to ensure DOM is ready
       requestAnimationFrame(() => {
         if (!revealHeaderRef.current || !contentRef.current) return;
 
-        // GSAP reveal animation
         const tl = gsap.timeline({
           onComplete: () => {
-            // Hide reveal header after animation completes
             if (revealHeaderRef.current) {
               revealHeaderRef.current.style.display = "none";
             }
-            // Ensure content is visible after animation
             if (contentRef.current) {
               contentRef.current.style.opacity = "1";
             }
           },
         });
 
-        // Clip path reveal animation
         tl.fromTo(
           revealHeaderRef.current,
           {
@@ -58,7 +52,6 @@ const PromptPage = () => {
           },
         );
 
-        // Split text animations
         tl.fromTo(
           splitTopRef.current,
           { y: "0%" },
@@ -73,7 +66,6 @@ const PromptPage = () => {
           0,
         );
 
-        // Content reveal
         tl.fromTo(
           contentRef.current,
           { y: "50%", opacity: 0 },
@@ -95,8 +87,8 @@ const PromptPage = () => {
 
   const handleTransitionComplete = () => {
     navigate("/chat", {
-      state: { 
-        initialPrompt: prompt, 
+      state: {
+        initialPrompt: prompt,
         platform: selectedPlatform,
         fileId: selectedPlatform === "figma" ? fileId : undefined
       },
@@ -105,7 +97,6 @@ const PromptPage = () => {
 
   return (
     <>
-      {/* Arrow Loading Screen */}
       {isLoading && (
         <ArrowLoader duration={2000} onComplete={handleTransitionComplete} />
       )}
@@ -117,7 +108,6 @@ const PromptPage = () => {
           fontFamily: "'Geist Mono', monospace",
         }}
       >
-        {/* Reveal Header Overlay */}
         {showContent && (
           <div
             ref={revealHeaderRef}
@@ -130,7 +120,6 @@ const PromptPage = () => {
             }}
           >
             <div className="relative w-full h-full flex items-center justify-center">
-              {/* Split top */}
               <div
                 ref={splitTopRef}
                 className="absolute inset-0 flex items-center justify-center"
@@ -140,7 +129,6 @@ const PromptPage = () => {
               >
                 <h1 className="text-9xl font-black text-black">SUPERDESIGN</h1>
               </div>
-              {/* Split bottom */}
               <div
                 ref={splitBottomRef}
                 className="absolute inset-0 flex items-center justify-center"
@@ -154,18 +142,15 @@ const PromptPage = () => {
           </div>
         )}
 
-        {/* Main Content */}
         <div
           ref={contentRef}
           className="relative"
           style={{ opacity: 0, zIndex: 1 }}
         >
-          {/* Login Button - Fixed Position */}
           <div className="fixed top-6 right-6 z-50">
             <LoginButton />
           </div>
 
-          {/* Logo and Brand */}
           <div className="mb-8 text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
               <img
@@ -181,7 +166,6 @@ const PromptPage = () => {
           </div>
 
           <div className="w-full max-w-3xl">
-            {/* Header */}
             <div className="text-center mb-12">
               <div className="flex items-center justify-center mb-6">
                 <Sparkles className="w-8 h-8 text-white mr-3" />
@@ -201,7 +185,6 @@ const PromptPage = () => {
               </p>
             </div>
 
-            {/* Platform Selection */}
             <div className="mb-6">
               <label className="block text-gray-400 text-sm font-medium mb-3">
                 Select Platform
@@ -210,11 +193,10 @@ const PromptPage = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedPlatform(null)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-medium transition-all ${
-                    selectedPlatform === null
+                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-medium transition-all ${selectedPlatform === null
                       ? "bg-white/20 text-white border-2 border-white/40 shadow-lg shadow-white/10"
                       : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20"
-                  }`}
+                    }`}
                 >
                   <Layers className="w-5 h-5" />
                   <div className="text-left">
@@ -227,11 +209,10 @@ const PromptPage = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedPlatform("figma")}
-                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-medium transition-all ${
-                    selectedPlatform === "figma"
+                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-medium transition-all ${selectedPlatform === "figma"
                       ? "bg-purple-500/20 text-purple-300 border-2 border-purple-400/40 shadow-lg shadow-purple-500/10"
                       : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20"
-                  }`}
+                    }`}
                 >
                   <Figma className="w-5 h-5" />
                   <div className="text-left">
@@ -244,11 +225,10 @@ const PromptPage = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedPlatform("framer")}
-                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-medium transition-all ${
-                    selectedPlatform === "framer"
+                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-medium transition-all ${selectedPlatform === "framer"
                       ? "bg-blue-500/20 text-blue-300 border-2 border-blue-400/40 shadow-lg shadow-blue-500/10"
                       : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20"
-                  }`}
+                    }`}
                 >
                   <Code className="w-5 h-5" />
                   <div className="text-left">
@@ -260,18 +240,16 @@ const PromptPage = () => {
                 </button>
               </div>
             </div>
-            
-            {/* File ID Input for Figma */}
+
             {selectedPlatform === "figma" && (
-              <FileIdInput 
+              <FileIdInput
                 onSubmit={(newFileId) => {
                   setFileId(newFileId);
                   setShowFileIdInput(false);
-                }} 
+                }}
               />
             )}
 
-            {/* Prompt Input */}
             <form onSubmit={handleSubmit} className="mb-8">
               <div className="relative group">
                 <textarea
@@ -300,7 +278,6 @@ const PromptPage = () => {
               )}
             </form>
 
-            {/* Footer */}
             <div className="mt-12 text-center">
               <p className="text-gray-500 text-sm">
                 Powered by SuperDesign AI • Press{" "}

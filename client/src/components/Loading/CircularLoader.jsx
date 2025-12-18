@@ -27,7 +27,6 @@ const CircularLoader = ({ onLoadComplete }) => {
           perspectiveOrigin: "center center",
         }}
       >
-        {/* Logo in center */}
         <div
           className="absolute z-50"
           style={{
@@ -52,7 +51,6 @@ const CircularLoader = ({ onLoadComplete }) => {
           />
         </div>
 
-        {/* Outer Circle 1 - Largest */}
         <svg
           viewBox="0 0 500 500"
           className="w-[900px] h-[900px] absolute"
@@ -95,7 +93,6 @@ const CircularLoader = ({ onLoadComplete }) => {
           </text>
         </svg>
 
-        {/* Middle Circle 2 */}
         <svg
           viewBox="0 0 500 500"
           className="w-[750px] h-[750px] absolute"
@@ -127,7 +124,6 @@ const CircularLoader = ({ onLoadComplete }) => {
           </text>
         </svg>
 
-        {/* Inner Circle 3 */}
         <svg
           viewBox="0 0 500 500"
           className="w-[600px] h-[600px] absolute"
@@ -158,7 +154,6 @@ const CircularLoader = ({ onLoadComplete }) => {
           </text>
         </svg>
 
-        {/* Innermost Circle 4 */}
         <svg
           viewBox="0 0 500 500"
           className="w-[450px] h-[450px] absolute"

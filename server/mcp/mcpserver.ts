@@ -1,3 +1,4 @@
+import express from 'express';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -10,17 +11,18 @@ import {
   McpError
 } from "@modelcontextprotocol/sdk/types.js";
 import { EventEmitter } from "events";
-import { MCPProvider, MCPTask, MCPResult, ProviderName, ServerEvents } from "@/utils/types.js";
+import { MCPProvider, MCPTask, MCPResult, ProviderName } from "@/utils/types.js";
 
 export class UnifiedMCPServer extends EventEmitter {
   private server: Server;
+  private httpServer?: any;
   private providers: Record<string, MCPProvider> = {};
   private activeJobs: Map<string, { task: MCPTask; startTime: number }> = new Map();
   private isInitialized = false;
 
   constructor() {
     super();
-    
+
     this.server = new Server(
       {
         name: "unified-design-mcp-server",
@@ -59,6 +61,118 @@ export class UnifiedMCPServer extends EventEmitter {
     });
   }
 
+  async startHTTP(port: number = 3845): Promise<void> {
+    const app = express();
+    app.use(express.json());
+
+    app.get('/health', (req, res) => {
+      res.json({
+        status: 'ok',
+        server: 'unified-design-mcp-server',
+        version: '1.0.0',
+        providers: Object.keys(this.providers),
+        initialized: this.isInitialized,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    app.post('/mcp', async (req, res) => {
+      const { jsonrpc, id, method, params } = req.body;
+
+      console.log(`[MCP HTTP] Received request:`, { id, method, params });
+
+      if (jsonrpc !== '2.0') {
+        return res.status(400).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32600,
+            message: 'Invalid Request: jsonrpc must be "2.0"'
+          },
+          id: id || null
+        });
+      }
+
+      try {
+        let result: any;
+
+        switch (method) {
+          case 'initialize':
+            result = await this.handleInitialize(params);
+            break;
+
+          case 'tools/list':
+            result = { tools: this.getTools() };
+            break;
+
+          case 'tools/call':
+            if (!params?.name) {
+              throw new Error('Missing tool name in tools/call');
+            }
+            const toolResult = await this.executeTool(params.name, params.arguments || {});
+            result = toolResult;
+            break;
+
+          case 'shutdown':
+            result = { success: true };
+            setTimeout(() => this.shutdown(), 1000);
+            break;
+
+          default:
+            throw new Error(`Unknown method: ${method}`);
+        }
+
+        res.json({
+          jsonrpc: '2.0',
+          result,
+          id
+        });
+
+      } catch (error) {
+        console.error(`[MCP HTTP] Error handling ${method}:`, error);
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: error instanceof Error ? error.message : 'Unknown error',
+            data: error instanceof Error ? error.stack : undefined
+          },
+          id: id || null
+        });
+      }
+    });
+
+    return new Promise((resolve) => {
+      this.httpServer = app.listen(port, () => {
+        console.log(`\n✅ MCP HTTP Server listening on http://127.0.0.1:${port}/mcp`);
+        console.log(`   Health endpoint: http://127.0.0.1:${port}/health`);
+        resolve();
+      });
+    });
+  }
+
+  private async handleInitialize(params: any): Promise<any> {
+    console.log('[MCP] Initialize request with params:', params);
+
+    if (!params || !params.protocolVersion) {
+      console.warn('[MCP] Initialize called without protocolVersion, using default');
+    }
+
+    await this.initialize();
+
+    return {
+      protocolVersion: '2024-11-05',
+      serverInfo: {
+        name: 'unified-design-mcp-server',
+        version: '1.0.0'
+      },
+      capabilities: {
+        tools: {},
+        roots: { listChanged: true },
+        sampling: {}
+      }
+    };
+  }
+
   getTools(): Tool[] {
     const baseTools: Tool[] = [
       {
@@ -83,119 +197,56 @@ export class UnifiedMCPServer extends EventEmitter {
       baseTools.push(
         {
           name: "design_create_element",
-          description: "Create a new design element (rectangle, text, image, etc.)",
+          description: "Create a new design element using a registered provider",
           inputSchema: {
             type: "object",
             properties: {
               provider: {
                 type: "string",
                 enum: Object.keys(this.providers),
-                description: "Design platform provider",
+                description: "The provider to use for creating the element"
               },
               elementType: {
                 type: "string",
-                description: "Type of element to create (e.g., 'rectangle', 'text', 'image')",
+                description: "Type of element to create (e.g., 'rectangle', 'text', 'frame')"
               },
               properties: {
                 type: "object",
-                description: "Element properties (e.g., width, height, color, text content)",
+                description: "Properties for the element (e.g., dimensions, colors, text content)"
               },
+              fileKey: {
+                type: "string",
+                description: "File key or ID where the element should be created"
+              }
             },
             required: ["provider", "elementType"],
           },
         },
         {
-          name: "design_modify_element",
-          description: "Modify an existing design element",
+          name: "design_process_prompt",
+          description: "Process a natural language prompt to create or modify design elements",
           inputSchema: {
             type: "object",
             properties: {
               provider: {
                 type: "string",
                 enum: Object.keys(this.providers),
+                description: "The provider to use"
               },
-              elementId: {
+              fileKey: {
                 type: "string",
-                description: "ID of the element to modify",
+                description: "File key or ID to work with"
               },
-              properties: {
-                type: "object",
-                description: "Properties to update",
-              },
-            },
-            required: ["provider", "elementId", "properties"],
-          },
-        },
-        {
-          name: "design_delete_element",
-          description: "Delete a design element",
-          inputSchema: {
-            type: "object",
-            properties: {
-              provider: { type: "string", enum: Object.keys(this.providers) },
-              elementId: { type: "string" },
-            },
-            required: ["provider", "elementId"],
-          },
-        },
-        {
-          name: "design_group_elements",
-          description: "Group multiple design elements together",
-          inputSchema: {
-            type: "object",
-            properties: {
-              provider: { type: "string", enum: Object.keys(this.providers) },
-              elementIds: {
-                type: "array",
-                items: { type: "string" },
-                description: "Array of element IDs to group",
-              },
-              groupName: { type: "string", description: "Optional name for the group" },
-            },
-            required: ["provider", "elementIds"],
-          },
-        },
-        {
-          name: "design_export",
-          description: "Export a design file",
-          inputSchema: {
-            type: "object",
-            properties: {
-              provider: { type: "string", enum: Object.keys(this.providers) },
-              fileId: { type: "string" },
-              format: {
+              prompt: {
                 type: "string",
-                enum: ["png", "jpg", "svg", "pdf"],
-                description: "Export format",
+                description: "Natural language description of what to create or modify"
               },
-              options: { type: "object", description: "Additional export options" },
+              accessToken: {
+                type: "string",
+                description: "Access token for the design platform API"
+              }
             },
-            required: ["provider", "fileId"],
-          },
-        },
-        {
-          name: "design_get_file_info",
-          description: "Get information about a design file",
-          inputSchema: {
-            type: "object",
-            properties: {
-              provider: { type: "string", enum: Object.keys(this.providers) },
-              fileId: { type: "string" },
-            },
-            required: ["provider", "fileId"],
-          },
-        },
-        {
-          name: "design_list_elements",
-          description: "List all elements in a design file",
-          inputSchema: {
-            type: "object",
-            properties: {
-              provider: { type: "string", enum: Object.keys(this.providers) },
-              fileId: { type: "string" },
-              pageId: { type: "string", description: "Optional page ID to filter elements" },
-            },
-            required: ["provider", "fileId"],
+            required: ["provider", "fileKey", "prompt"],
           },
         }
       );
@@ -206,6 +257,8 @@ export class UnifiedMCPServer extends EventEmitter {
 
   async executeTool(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
     try {
+      console.log(`[MCP] Executing tool: ${name} with args:`, args);
+
       switch (name) {
         case "design_get_providers":
           return this.handleGetProviders();
@@ -214,30 +267,16 @@ export class UnifiedMCPServer extends EventEmitter {
           return this.handleGetStatus();
 
         case "design_create_element":
-          return this.handleCreateElement(args);
+          return await this.handleCreateElement(args);
 
-        case "design_modify_element":
-          return this.handleModifyElement(args);
-
-        case "design_delete_element":
-          return this.handleDeleteElement(args);
-
-        case "design_group_elements":
-          return this.handleGroupElements(args);
-
-        case "design_export":
-          return this.handleExport(args);
-
-        case "design_get_file_info":
-          return this.handleGetFileInfo(args);
-
-        case "design_list_elements":
-          return this.handleListElements(args);
+        case "design_process_prompt":
+          return await this.handleProcessPrompt(args);
 
         default:
           throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
       }
     } catch (error) {
+      console.error(`[MCP] Error executing tool ${name}:`, error);
       if (error instanceof McpError) {
         throw error;
       }
@@ -246,6 +285,90 @@ export class UnifiedMCPServer extends EventEmitter {
         error instanceof Error ? error.message : "Unknown error"
       );
     }
+  }
+
+  private async handleCreateElement(args: Record<string, unknown>): Promise<CallToolResult> {
+    const { provider, elementType, properties, fileKey } = args;
+
+    if (!provider || typeof provider !== 'string') {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid provider parameter');
+    }
+
+    if (!elementType || typeof elementType !== 'string') {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid elementType parameter');
+    }
+
+    const providerInstance = this.providers[provider];
+    if (!providerInstance) {
+      throw new McpError(ErrorCode.InvalidParams, `Provider '${provider}' not found`);
+    }
+
+    const task: MCPTask = {
+      id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      provider: provider as ProviderName,
+      action: 'create',
+      parameters: {
+        elementType,
+        properties: properties || {},
+        fileKey
+      },
+      timestamp: Date.now()
+    };
+
+    const result = await this.execute(task);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        } as TextContent,
+      ],
+    };
+  }
+
+  private async handleProcessPrompt(args: Record<string, unknown>): Promise<CallToolResult> {
+    const { provider, fileKey, prompt, accessToken } = args;
+
+    if (!provider || typeof provider !== 'string') {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid provider parameter');
+    }
+
+    if (!fileKey || typeof fileKey !== 'string') {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid fileKey parameter');
+    }
+
+    if (!prompt || typeof prompt !== 'string') {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid prompt parameter');
+    }
+
+    const providerInstance = this.providers[provider];
+    if (!providerInstance) {
+      throw new McpError(ErrorCode.InvalidParams, `Provider '${provider}' not found`);
+    }
+
+    const task: MCPTask = {
+      id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      provider: provider as ProviderName,
+      action: 'process_prompt',
+      parameters: {
+        fileKey,
+        prompt,
+        accessToken
+      },
+      timestamp: Date.now()
+    };
+
+    const result = await this.execute(task);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        } as TextContent,
+      ],
+    };
   }
 
   handleGetProviders(): CallToolResult {
@@ -280,6 +403,7 @@ export class UnifiedMCPServer extends EventEmitter {
           text: JSON.stringify(
             {
               status: "running",
+              initialized: this.isInitialized,
               providers: Object.keys(this.providers),
               activeJobs: this.activeJobs.size,
               uptime: process.uptime(),
@@ -292,172 +416,6 @@ export class UnifiedMCPServer extends EventEmitter {
     };
   }
 
-  async handleCreateElement(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, elementType, properties } = args;
-
-    if (!provider || typeof provider !== "string") {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid provider");
-    }
-    if (!elementType || typeof elementType !== "string") {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid elementType");
-    }
-
-    const task: MCPTask = {
-      id: `create-${Date.now()}`,
-      provider: provider as ProviderName,
-      action: `create${elementType.charAt(0).toUpperCase() + elementType.slice(1)}`,
-      payload: { ...(properties as Record<string, unknown> || {}) },
-      metadata: { createdAt: Date.now() },
-    };
-
-    const result = await this.execute(task);
-    return {
-      content: [
-        { type: "text", text: JSON.stringify(result, null, 2) } as TextContent,
-      ],
-    };
-  }
-
-  async handleModifyElement(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, elementId, properties } = args;
-
-    if (!provider || typeof provider !== "string") {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid provider");
-    }
-    if (!elementId || typeof elementId !== "string") {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid elementId");
-    }
-
-    const task: MCPTask = {
-      id: `modify-${Date.now()}`,
-      provider: provider as ProviderName,
-      action: "modifyElement",
-      payload: { elementId, ...(properties as Record<string, unknown> || {}) },
-      metadata: { createdAt: Date.now() },
-    };
-
-    const result = await this.execute(task);
-    return {
-      content: [
-        { type: "text", text: JSON.stringify(result, null, 2) } as TextContent,
-      ],
-    };
-  }
-
-  async handleDeleteElement(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, elementId } = args;
-
-    if (!provider || typeof provider !== "string" || !elementId || typeof elementId !== "string") {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid parameters");
-    }
-
-    const task: MCPTask = {
-      id: `delete-${Date.now()}`,
-      provider: provider as ProviderName,
-      action: "deleteElement",
-      payload: { elementId },
-      metadata: { createdAt: Date.now() },
-    };
-
-    const result = await this.execute(task);
-    return {
-      content: [
-        { type: "text", text: JSON.stringify(result, null, 2) } as TextContent,
-      ],
-    };
-  }
-
-  async handleGroupElements(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, elementIds, groupName } = args;
-
-    if (!provider || typeof provider !== "string" || !elementIds || !Array.isArray(elementIds)) {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid parameters");
-    }
-
-    const task: MCPTask = {
-      id: `group-${Date.now()}`,
-      provider: provider as ProviderName,
-      action: "groupElements",
-      payload: { elementIds, groupName: groupName || `Group ${Date.now()}` },
-      metadata: { createdAt: Date.now() },
-    };
-
-    const result = await this.execute(task);
-    return {
-      content: [
-        { type: "text", text: JSON.stringify(result, null, 2) } as TextContent,
-      ],
-    };
-  }
-
-  async handleExport(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, fileId, format, options } = args;
-
-    if (!provider || typeof provider !== "string" || !fileId || typeof fileId !== "string") {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid parameters");
-    }
-
-    const task: MCPTask = {
-      id: `export-${Date.now()}`,
-      provider: provider as ProviderName,
-      action: "exportDesign",
-      payload: { fileId, format: format || "png", ...(options as Record<string, unknown> || {}) },
-      metadata: { createdAt: Date.now() },
-    };
-
-    const result = await this.execute(task);
-    return {
-      content: [
-        { type: "text", text: JSON.stringify(result, null, 2) } as TextContent,
-      ],
-    };
-  }
-
-  async handleGetFileInfo(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, fileId } = args;
-
-    if (!provider || typeof provider !== "string" || !fileId || typeof fileId !== "string") {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid parameters");
-    }
-
-    const task: MCPTask = {
-      id: `fileinfo-${Date.now()}`,
-      provider: provider as ProviderName,
-      action: "getFileInfo",
-      payload: { fileId },
-      metadata: { createdAt: Date.now() },
-    };
-
-    const result = await this.execute(task);
-    return {
-      content: [
-        { type: "text", text: JSON.stringify(result.data || {}, null, 2) } as TextContent,
-      ],
-    };
-  }
-
-  async handleListElements(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, fileId, pageId } = args;
-
-    if (!provider || typeof provider !== "string" || !fileId || typeof fileId !== "string") {
-      throw new McpError(ErrorCode.InvalidParams, "Missing or invalid parameters");
-    }
-
-    const task: MCPTask = {
-      id: `list-${Date.now()}`,
-      provider: provider as ProviderName,
-      action: "listElements",
-      payload: { fileId, pageId },
-      metadata: { createdAt: Date.now() },
-    };
-
-    const result = await this.execute(task);
-    return {
-      content: [
-        { type: "text", text: JSON.stringify(result.data || { elements: [] }, null, 2) } as TextContent,
-      ],
-    };
-  }
   async execute(task: MCPTask): Promise<MCPResult> {
     const provider = this.providers[task.provider];
 
@@ -503,21 +461,17 @@ export class UnifiedMCPServer extends EventEmitter {
 
   async registerProvider(name: string, provider: MCPProvider): Promise<void> {
     try {
-      // Initialize provider if it has initialize method
       if (provider.initialize) {
         try {
           await provider.initialize();
           console.log(`Provider ${name} initialized successfully`);
         } catch (initError) {
-          console.warn(`Provider ${name} initialization failed but will continue in limited mode:`, initError);
-          // We still register the provider even if initialization fails
-          // It might still be able to handle some operations
+          console.warn(`Provider ${name} initialization failed but will continue:`, initError);
         }
       }
 
       this.providers[name] = provider;
 
-      // Forward provider events
       provider.on("taskStart", (task: MCPTask) => {
         this.emit("taskStart", { provider: name, task });
       });
@@ -563,9 +517,13 @@ export class UnifiedMCPServer extends EventEmitter {
     console.error("UnifiedMCPServer started on stdio");
   }
 
-
   async shutdown(): Promise<void> {
     console.log("Shutting down UnifiedMCPServer...");
+
+    if (this.httpServer) {
+      this.httpServer.close();
+      console.log("HTTP server closed");
+    }
 
     const providerNames = Object.keys(this.providers);
     await Promise.all(providerNames.map(name => this.unregisterProvider(name)));
@@ -576,9 +534,6 @@ export class UnifiedMCPServer extends EventEmitter {
     console.log("UnifiedMCPServer shut down");
   }
 
-  /**
-   * Get active jobs info
-   */
   getActiveJobs(): Record<string, { taskId: string; provider: string; action: string; duration: number }> {
     const jobs: Record<string, { taskId: string; provider: string; action: string; duration: number }> = {};
 

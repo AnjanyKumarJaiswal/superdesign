@@ -1,7 +1,6 @@
 import axios from "axios";
 import { ProviderName } from "@/utils/types";
 
-// OAuth configuration for each provider
 interface OAuthConfig {
   clientId: string;
   clientSecret: string;
@@ -11,7 +10,6 @@ interface OAuthConfig {
   scope: string;
 }
 
-// OAuth token response
 export interface OAuthTokenResponse {
   accessToken: string;
   refreshToken?: string;
@@ -21,7 +19,6 @@ export interface OAuthTokenResponse {
   providerUserId?: string;
 }
 
-// OAuth error
 export class OAuthError extends Error {
   constructor(
     message: string,
@@ -58,12 +55,9 @@ class OAuthService {
     },
   };
 
-  /**
-   * Generate OAuth authorization URL for a provider
-   */
   getAuthorizationUrl(provider: ProviderName, state?: string): string {
     const config = this.configs[provider];
-    
+
     console.log(`Getting auth URL for ${provider}`);
 
     if (!config) {
@@ -77,10 +71,8 @@ class OAuthService {
       );
     }
 
-    // Generate random state if not provided
     const stateParam = state || Math.random().toString(36).substring(2);
 
-    // Build query parameters
     const params = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: config.redirectUri,
@@ -89,17 +81,13 @@ class OAuthService {
       state: stateParam
     });
 
-    // Generate the full authorization URL
     const authUrl = `${config.authUrl}?${params.toString()}`;
-    
+
     console.log(`Generated auth URL for ${provider}`);
-    
+
     return authUrl;
   }
 
-  /**
-   * Exchange authorization code for access token
-   */
   async exchangeCodeForToken(
     provider: ProviderName,
     code: string,
@@ -120,12 +108,10 @@ class OAuthService {
     }
 
     try {
-      // Validate code is not empty
       if (!code || code.trim() === '') {
         throw new OAuthError('Authorization code is empty or invalid', provider);
       }
-      
-      // Make token request based on provider
+
       let tokenResponse;
       if (provider === "figma") {
         tokenResponse = await this.exchangeFigmaToken(config, code);
@@ -140,7 +126,7 @@ class OAuthService {
 
     } catch (error) {
       console.error(`Token exchange error for ${provider}:`, error);
-      
+
       if (axios.isAxiosError(error)) {
         const errorMessage =
           error.response?.data?.error_description ||
@@ -162,19 +148,14 @@ class OAuthService {
     }
   }
 
-  /**
-   * Exchange Figma authorization code for access token
-   */
   private async exchangeFigmaToken(
     config: OAuthConfig,
     code: string,
   ): Promise<OAuthTokenResponse> {
     console.log(`Starting Figma token exchange`);
-    
-    // Sanitize the code
+
     const sanitizedCode = code.trim();
-    
-    // Prepare the token request body
+
     const requestBody = new URLSearchParams({
       client_id: config.clientId,
       client_secret: config.clientSecret,
@@ -182,7 +163,7 @@ class OAuthService {
       code: sanitizedCode,
       grant_type: "authorization_code",
     }).toString();
-    
+
     try {
       const response = await axios.post(config.tokenUrl, requestBody, {
         headers: {
@@ -194,7 +175,6 @@ class OAuthService {
       console.log(`Figma token exchange success: ${response.status}`);
       const data = response.data;
 
-      // Validate response data
       if (!data.access_token) {
         throw new Error("Missing access_token in response");
       }
@@ -202,7 +182,7 @@ class OAuthService {
       return {
         accessToken: data.access_token,
         refreshToken: data.refresh_token,
-        expiresIn: data.expires_in || 7776000, // Figma tokens expire in 90 days
+        expiresIn: data.expires_in || 7776000,
         tokenType: data.token_type || "Bearer",
         scope: data.scope,
         providerUserId: data.user_id
@@ -213,18 +193,14 @@ class OAuthService {
     }
   }
 
-  /**
-   * Exchange Framer authorization code for access token
-   */
   private async exchangeFramerToken(
     config: OAuthConfig,
     code: string,
   ): Promise<OAuthTokenResponse> {
     console.log(`Starting Framer token exchange`);
-    
-    // Sanitize the code
+
     const sanitizedCode = code.trim();
-    
+
     try {
       const response = await axios.post(
         config.tokenUrl,
@@ -246,7 +222,6 @@ class OAuthService {
       console.log(`Framer token exchange success: ${response.status}`);
       const data = response.data;
 
-      // Validate response
       if (!data.access_token) {
         throw new Error("Missing access_token in response");
       }
@@ -265,14 +240,10 @@ class OAuthService {
     }
   }
 
-  /**
-   * Check if provider credentials are configured
-   */
   isProviderConfigured(provider: ProviderName): boolean {
     const config = this.configs[provider];
     return !!(config && config.clientId && config.clientSecret);
   }
 }
 
-// Export singleton instance
 export const oauthService = new OAuthService();

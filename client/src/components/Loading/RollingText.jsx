@@ -10,7 +10,6 @@ const RollingText = ({ text, className = "", delay = 0 }) => {
     const innerText = text;
     element.innerHTML = "";
 
-    // Split text into words
     const words = innerText.split(" ");
 
     words.forEach((word, wordIndex) => {
@@ -37,14 +36,12 @@ const RollingText = ({ text, className = "", delay = 0 }) => {
       wordWrapper.appendChild(textContainer.cloneNode(true));
       element.appendChild(wordWrapper);
 
-      // Add space after each word except the last one
       if (wordIndex < words.length - 1) {
         const space = document.createTextNode(" ");
         element.appendChild(space);
       }
     });
 
-    // Auto-play animation after delay
     const timer = setTimeout(() => {
       element.classList.add("play");
     }, delay);
