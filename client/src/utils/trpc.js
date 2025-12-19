@@ -1,8 +1,13 @@
 import { createTRPCReact } from '@trpc/react-query';
-import { httpBatchLink, splitLink, wsLink } from '@trpc/client';
+import { httpBatchLink, splitLink, wsLink, createWSClient } from '@trpc/client';
 import { getAuthToken } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/trpc';
+const WS_URL = API_URL.replace(/^http/, 'ws');
+
+const wsClient = createWSClient({
+  url: WS_URL,
+});
 
 export const trpc = createTRPCReact();
 

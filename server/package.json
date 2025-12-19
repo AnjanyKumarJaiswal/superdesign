@@ -1,12 +1,18 @@
 {
-  "name": "superdesign-server",
+  "name": "server",
   "version": "1.0.0",
   "description": "Standalone tRPC server with LangGraph orchestration for SuperDesign",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch -r dotenv/config -r tsconfig-paths/register index.ts",
     "build": "tsc",
-    "start": "node -r dotenv/config -r tsconfig-paths/register dist/index.js"
+    "start": "node -r dotenv/config -r tsconfig-paths/register dist/index.js",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo node_modules",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",

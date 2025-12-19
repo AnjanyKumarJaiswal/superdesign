@@ -2,43 +2,41 @@
   "name": "superdesign",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\" --names \"SERVER,CLIENT\" --prefix-colors \"blue,green\"",
-    "server:dev": "cd server && npm run dev",
-    "client:dev": "cd client && npm run dev",
-    "server": "npm run server:dev",
-    "client": "npm run client:dev",
-    "build": "npm run build:server && npm run build:client",
-    "build:server": "cd server && npm run build",
-    "build:client": "cd client && npm run build",
-    "start": "concurrently \"npm run start:server\" \"npm run start:client\" --names \"SERVER,CLIENT\" --prefix-colors \"blue,green\"",
-    "start:server": "cd server && npm run start",
-    "start:client": "cd client && npm run preview",
-    "lint": "npm run lint:server && npm run lint:client",
-    "lint:server": "cd server && npm run lint --if-present",
-    "lint:client": "cd client && npm run lint",
-    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
-  },
-  "dependencies": {
-    "@langchain/core": "^0.3.78",
-    "@langchain/langgraph": "^0.4.9",
-    "@trpc/server": "^11.0.0-rc.544",
-    "next": "15.5.4",
-    "next-auth": "^5.0.0-beta.25",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "zod": "^3.23.8"
+    "dev": "turbo run dev",
+    "dev:client": "turbo run dev --filter=client",
+    "dev:server": "turbo run dev --filter=server",
+    "build": "turbo run build",
+    "build:client": "turbo run build --filter=client",
+    "build:server": "turbo run build --filter=server",
+    "start": "turbo run start",
+    "start:client": "turbo run start --filter=client",
+    "start:server": "turbo run start --filter=server",
+    "lint": "turbo run lint",
+    "lint:client": "turbo run lint --filter=client",
+    "lint:server": "turbo run lint --filter=server",
+    "type-check": "turbo run type-check",
+    "type-check:client": "turbo run type-check --filter=client",
+    "type-check:server": "turbo run type-check --filter=server",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "clean:client": "turbo run clean --filter=client",
+    "clean:server": "turbo run clean --filter=server",
+    "db:migrate": "turbo run db:migrate --filter=server",
+    "db:push": "turbo run db:push --filter=server",
+    "db:studio": "turbo run db:studio --filter=server",
+    "db:seed": "turbo run db:seed --filter=server"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "concurrently": "^9.1.2",
-    "eslint": "^9",
-    "eslint-config-next": "15.5.4",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "turbo": "^2.5.5",
+    "typescript": "^5.9.0"
+  },
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": "22.14.0",
+    "yarn": "1.22.22"
   }
 }
