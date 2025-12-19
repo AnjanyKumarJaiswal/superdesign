@@ -1,12 +1,15 @@
 {
-  "name": "pixelpilot",
+  "name": "client",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "start": "vite preview",
     "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo node_modules",
     "preview": "vite preview"
   },
   "dependencies": {
