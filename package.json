@@ -28,7 +28,15 @@
     "db:migrate": "turbo run db:migrate --filter=server",
     "db:push": "turbo run db:push --filter=server",
     "db:studio": "turbo run db:studio --filter=server",
-    "db:seed": "turbo run db:seed --filter=server"
+    "db:seed": "turbo run db:seed --filter=server",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up --build",
+    "docker:dev:detach": "docker-compose -f docker-compose.dev.yml up -d --build",
+    "docker:prod": "docker-compose up --build",
+    "docker:prod:detach": "docker-compose up -d --build",
+    "docker:down": "docker-compose down",
+    "docker:down:dev": "docker-compose -f docker-compose.dev.yml down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:clean": "docker-compose down -v --rmi all"
   },
   "devDependencies": {
     "turbo": "^2.5.5",
