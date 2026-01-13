@@ -1,8 +1,8 @@
-import {
+import type {
   MCPMessage,
   MCPResponseMessage,
   MCPErrorMessage
-} from '@/utils/types';
+} from '@/types';
 
 export class MCPClient {
   private messageId = 0;

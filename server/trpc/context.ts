@@ -3,13 +3,10 @@ import type { Request, Response } from "express";
 import type { IncomingMessage } from "http";
 import { WebSocket } from "ws";
 import { verifyToken, extractTokenFromHeader } from "@/auth/jwtService";
+import type { AuthenticatedUser } from "@/types";
 
-export interface AuthenticatedUser {
-  userId: string;
-  platform: "figma" | "framer";
-  accessToken: string;
-  refreshToken?: string;
-}
+// Re-export for backward compatibility
+export type { AuthenticatedUser } from "@/types";
 
 export function createTRPCContext(
   opts:

@@ -1,12 +1,13 @@
-import { UnifiedMCPServer } from "./mcpserver";
-import { FigmaProvider } from "../providers/figmaProvider";
-import { FramerProvider } from "../providers/framerProvider";
+import { UnifiedMCPServer } from "@/mcp/mcpserver";
+import { FigmaProvider } from "@/mcp/providers/figmaProvider";
+import { FramerProvider } from "@/mcp/providers/framerProvider";
+import { colors } from "@/types";
 
 export const mcp = new UnifiedMCPServer();
 
 const figmaProvider = new FigmaProvider({
   mcpServerUrl: process.env.FIGMA_MCP_URL,
-  hostUrl: process.env.CLIENT_URL || 'http://localhost:5173'
+  hostUrl: process.env.CLIENT_URL
 });
 
 const framerProvider = new FramerProvider();
@@ -29,6 +30,12 @@ const framerProvider = new FramerProvider();
   console.error("Error during provider registration:", err);
 });
 
+const shutdown = (signal: string) => {
+  console.log(
+    `\n${colors.yellow}${signal}  received, shutting down gracefully...${colors.reset}`,
+  );
+  process.exit(0);
+};
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
