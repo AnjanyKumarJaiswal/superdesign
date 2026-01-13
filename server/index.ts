@@ -1,36 +1,34 @@
-import dotenv from "dotenv";
-
-dotenv.config();
-
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { applyWSSHandler } from "@trpc/server/adapters/ws";
 import { createServer } from "http";
-import { WebSocketServer } from "ws";
 import { appRouter } from "@/trpc/router";
 import { createTRPCContext } from "@/trpc/context";
 import { oauthService, OAuthError } from "@/auth/oauthService";
-import { generateToken, verifyToken, extractTokenFromHeader, type UserPayload } from "@/auth/jwtService";
+import { generateToken, verifyToken, extractTokenFromHeader } from "@/auth/jwtService";
 import { tokenExpirationService } from "@/auth/tokenExpirationService";
 import { saveTokenToEnv } from "@/utils/envManager";
+import { colors, UserPayload } from "./types";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 const server = createServer(app);
 
-const colors = {
-  reset: "\x1b[0m",
-  bright: "\x1b[1m",
-  dim: "\x1b[2m",
-  red: "\x1b[31m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  blue: "\x1b[34m",
-  magenta: "\x1b[35m",
-  cyan: "\x1b[36m",
-  white: "\x1b[37m",
-};
+//CORS
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://localhost:3001",
+    ],
+    credentials: true,
+  }),
+);
+
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -75,16 +73,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "http://localhost:3001",
-    ],
-    credentials: true,
-  }),
-);
 
 app.use(cookieParser());
 app.use(express.json());
@@ -274,39 +262,6 @@ app.get("/auth/:platform", (req, res) => {
   }
 });
 
-const wss = new WebSocketServer({ server });
-
-wss.on("connection", (ws, req) => {
-  const timestamp = new Date().toLocaleTimeString();
-  console.log(
-    `${colors.dim}[${timestamp}]${colors.reset} ` +
-    `${colors.magenta}${colors.bright}WS CONNECTED${colors.reset} ` +
-    `${colors.dim}from ${req.socket.remoteAddress}${colors.reset}`,
-  );
-
-  ws.on("close", () => {
-    const timestamp = new Date().toLocaleTimeString();
-    console.log(
-      `${colors.dim}[${timestamp}]${colors.reset} ` +
-      `${colors.yellow}WS DISCONNECTED${colors.reset}`,
-    );
-  });
-
-  ws.on("error", (error) => {
-    const timestamp = new Date().toLocaleTimeString();
-    console.log(
-      `${colors.dim}[${timestamp}]${colors.reset} ` +
-      `${colors.red}WS ERROR${colors.reset} ` +
-      `${error.message}`,
-    );
-  });
-});
-
-applyWSSHandler({
-  wss,
-  router: appRouter,
-  createContext: createTRPCContext,
-});
 
 const PORT = process.env.PORT || 4000;
 
@@ -318,9 +273,6 @@ server.listen(PORT, () => {
   console.log("=".repeat(60));
   console.log(
     `${colors.cyan} HTTP:${colors.reset}       http://localhost:${PORT}/api/trpc`,
-  );
-  console.log(
-    `${colors.magenta} WebSocket:${colors.reset}  ws://localhost:${PORT}`,
   );
   console.log(
     `${colors.green} Health:${colors.reset}     http://localhost:${PORT}/health`,
@@ -342,7 +294,7 @@ server.listen(PORT, () => {
 
   if (!figmaConfigured || !jwtConfigured) {
     console.log(
-      `\n${colors.yellow}⚠ Warning: Missing OAuth configuration${colors.reset}`,
+      `\n${colors.yellow} Warning: Missing OAuth configuration${colors.reset}`,
     );
     console.log(
       `${colors.dim}Set FIGMA_CLIENT_ID, FIGMA_CLIENT_SECRET, and JWT_SECRET in .env${colors.reset}`,
@@ -357,12 +309,7 @@ const shutdown = (signal: string) => {
   console.log(
     `\n${colors.yellow}${signal}  received, shutting down gracefully...${colors.reset}`,
   );
-  wss.close(() => {
-    server.close(() => {
-      console.log(`${colors.green}Server closed successfully${colors.reset}`);
-      process.exit(0);
-    });
-  });
+  process.exit(0);
 };
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

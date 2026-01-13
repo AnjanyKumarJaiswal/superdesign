@@ -11,7 +11,7 @@ import {
   McpError
 } from "@modelcontextprotocol/sdk/types.js";
 import { EventEmitter } from "events";
-import { MCPProvider, MCPTask, MCPResult, ProviderName } from "@/utils/types.js";
+import type { MCPProvider, MCPTask, MCPResult, ProviderName } from "@/types";
 
 export class UnifiedMCPServer extends EventEmitter {
   private server: Server;
@@ -307,6 +307,11 @@ export class UnifiedMCPServer extends EventEmitter {
       id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       provider: provider as ProviderName,
       action: 'create',
+      payload: {
+        elementType,
+        properties: properties || {},
+        fileKey
+      },
       parameters: {
         elementType,
         properties: properties || {},
@@ -351,6 +356,11 @@ export class UnifiedMCPServer extends EventEmitter {
       id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       provider: provider as ProviderName,
       action: 'process_prompt',
+      payload: {
+        fileKey,
+        prompt,
+        accessToken
+      },
       parameters: {
         fileKey,
         prompt,
