@@ -18,8 +18,6 @@ export class FigmaMCPClient {
             capabilities: {}
         });
 
-        // this.mcpClient.connect(this.transport);
-
         this.accessToken = accessToken || process.env.FIGMA_ACCESS_TOKEN;
         console.log("[FIGMA-MCP-CLIENT] Initialized Figma MCP Client with URL:", figmaMCPServerURL);
     }

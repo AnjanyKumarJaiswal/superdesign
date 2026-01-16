@@ -9,13 +9,13 @@ const DesignGeneratorDemo = () => {
   const user = getCurrentUser();
   const [prompt, setPrompt] = useState("");
   const [fileId, setFileId] = useState("");
-  const [taskId, setTaskId] = useState(null);
+  const [result, setResult] = useState(null);
 
   const generateDesign = trpc.generateDesign.useMutation({
     onSuccess: (data) => {
-      console.log("✅ Design generation started:", data);
-      setTaskId(data.taskId);
-      alert(`Design generation started! Task ID: ${data.taskId}`);
+      console.log("✅ Design generation completed:", data);
+      setResult(data);
+      alert(`Design generation completed! Task ID: ${data.taskId}`);
     },
     onError: (error) => {
       console.error("❌ Design generation failed:", error);
@@ -26,19 +26,6 @@ const DesignGeneratorDemo = () => {
       }
     },
   });
-
-  const jobStatus = trpc.getJobStatus.useQuery(
-    { jobId: taskId || "" },
-    {
-      enabled: !!taskId,
-      refetchInterval: (data) => {
-        if (data?.status === "completed" || data?.status === "failed") {
-          return false;
-        }
-        return 2000;
-      },
-    }
-  );
 
   const handleGenerate = () => {
     if (!authenticated) {
@@ -144,23 +131,23 @@ const DesignGeneratorDemo = () => {
         </button>
       </div>
 
-      {taskId && (
+      {result && (
         <div className="mt-8 p-4 bg-white/5 rounded-xl border border-white/10">
           <h3 className="text-sm font-medium text-gray-400 mb-3 uppercase tracking-wider">Job Status</h3>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-400">Task ID: {taskId}</span>
-            <span className={`px-2 py-1 rounded text-xs font-medium ${jobStatus.data?.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                jobStatus.data?.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                  'bg-blue-500/20 text-blue-400'
-              }`}>
-              {jobStatus.data?.status || 'Pending...'}
+            <span className="text-sm text-gray-400">Task ID: {result.taskId}</span>
+            <span className={`px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400`}>
+              Completed
             </span>
           </div>
-          {jobStatus.data?.result?.message && (
+          {result.result && (
             <p className="mt-2 text-sm text-gray-300">
-              {jobStatus.data.result.message}
+              {result.result}
             </p>
           )}
+          <p className="mt-1 text-xs text-gray-500">
+            Executed {result.executedSteps} steps
+          </p>
         </div>
       )}
     </div>

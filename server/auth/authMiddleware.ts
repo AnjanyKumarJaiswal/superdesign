@@ -1,16 +1,10 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { verifyToken, extractTokenFromHeader } from "./jwtService";
 import { tokenExpirationService } from "./tokenExpirationService";
+import type { AuthRequest } from "@/types";
 
-export interface AuthRequest extends Request {
-  user?: {
-    userId: string;
-    platform: "figma" | "framer";
-    accessToken: string;
-    refreshToken?: string;
-    tokenExpiry?: number;
-  };
-}
+// Re-export for backward compatibility
+export type { AuthRequest } from "@/types";
 
 export function authenticateToken(
   req: AuthRequest,

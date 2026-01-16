@@ -1,5 +1,8 @@
 import axios from "axios";
-import { ProviderName } from "@/utils/types";
+import { ProviderName, OAuthTokenResponse } from "@/types";
+
+// Re-export for backward compatibility
+export type { OAuthTokenResponse } from "@/types";
 
 interface OAuthConfig {
   clientId: string;
@@ -8,15 +11,6 @@ interface OAuthConfig {
   authUrl: string;
   tokenUrl: string;
   scope: string;
-}
-
-export interface OAuthTokenResponse {
-  accessToken: string;
-  refreshToken?: string;
-  expiresIn: number;
-  tokenType: string;
-  scope?: string;
-  providerUserId?: string;
 }
 
 export class OAuthError extends Error {

@@ -1,21 +1,10 @@
 import jwt from "jsonwebtoken";
+import type { UserPayload, JWTPayload } from "@/types";
+
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const JWT_EXPIRES_IN: string | number = process.env.JWT_EXPIRES_IN || "7d";
 const FIGMA_TOKEN_EXPIRES_IN: string | number = process.env.FIGMA_TOKEN_EXPIRES_IN || "30m";
-
-export interface UserPayload {
-  userId: string;
-  platform: "figma" | "framer";
-  accessToken: string;
-  refreshToken?: string;
-  tokenExpiry?: number;
-}
-
-export interface JWTPayload extends UserPayload {
-  iat: number;
-  exp: number;
-}
 
 export function generateToken(payload: UserPayload): string {
   if (payload.platform === "figma") {

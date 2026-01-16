@@ -10,6 +10,7 @@ import { generateToken, verifyToken, extractTokenFromHeader } from "@/auth/jwtSe
 import { tokenExpirationService } from "@/auth/tokenExpirationService";
 import { saveTokenToEnv } from "@/utils/envManager";
 import { colors, UserPayload } from "./types";
+import { initializeMCP, shutdownMCPServer, getMCPHealthStatus } from "@/mcp";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -17,7 +18,7 @@ dotenv.config();
 const app = express();
 const server = createServer(app);
 
-//CORS
+// CORS
 app.use(
   cors({
     origin: [
@@ -26,7 +27,7 @@ app.use(
       "http://localhost:3001",
     ],
     credentials: true,
-  }),
+  })
 );
 
 
@@ -48,7 +49,7 @@ app.use((req, res, next) => {
   console.log(
     `${colors.dim}[${timestamp}]${colors.reset} ` +
     `${methodColor}${colors.bright}${req.method}${colors.reset} ` +
-    `${colors.cyan}${req.path}${colors.reset}`,
+    `${colors.cyan}${req.path}${colors.reset}`
   );
 
   res.on("finish", () => {
@@ -66,13 +67,12 @@ app.use((req, res, next) => {
       `${colors.dim}[${timestamp}]${colors.reset} ` +
       `${statusColor}${res.statusCode}${colors.reset} ` +
       `${colors.cyan}${req.path}${colors.reset} ` +
-      `${colors.dim}${duration}ms${colors.reset}`,
+      `${colors.dim}${duration}ms${colors.reset}`
     );
   });
 
   next();
 });
-
 
 app.use(cookieParser());
 app.use(express.json());
@@ -82,11 +82,27 @@ app.use(
   createExpressMiddleware({
     router: appRouter,
     createContext: createTRPCContext,
-  }),
+  })
 );
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/health", async (req, res) => {
+  try {
+    const mcpHealth = await getMCPHealthStatus();
+
+    res.json({
+      status: "ok",
+      server: "superdesign",
+      version: "1.0.0",
+      mcp: mcpHealth,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      error: error instanceof Error ? error.message : "Unknown error",
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 app.post("/auth/save-token", async (req, res) => {
@@ -166,26 +182,26 @@ app.get("/auth/callback/:platform", async (req, res) => {
     const errorMsg = error_description || error;
     console.error(`OAuth error for ${platform}:`, errorMsg);
     return res.redirect(
-      `${clientUrl}/auth/callback?error=${encodeURIComponent(String(errorMsg))}&platform=${platform}`,
+      `${clientUrl}/auth/callback?error=${encodeURIComponent(String(errorMsg))}&platform=${platform}`
     );
   }
 
   if (!code) {
     return res.redirect(
-      `${clientUrl}/auth/callback?error=${encodeURIComponent("No authorization code received")}&platform=${platform}`,
+      `${clientUrl}/auth/callback?error=${encodeURIComponent("No authorization code received")}&platform=${platform}`
     );
   }
 
   if (platform !== "figma" && platform !== "framer") {
     return res.redirect(
-      `${clientUrl}/auth/callback?error=${encodeURIComponent("Unsupported platform")}&platform=${platform}`,
+      `${clientUrl}/auth/callback?error=${encodeURIComponent("Unsupported platform")}&platform=${platform}`
     );
   }
 
   try {
     const tokenResponse = await oauthService.exchangeCodeForToken(
       platform,
-      String(code),
+      String(code)
     );
 
     const userId = `${platform}-user-${Math.random().toString(36).slice(2, 10)}`;
@@ -231,7 +247,7 @@ app.get("/auth/callback/:platform", async (req, res) => {
     const errorMsg =
       error instanceof OAuthError ? error.message : "Authentication failed";
     res.redirect(
-      `${clientUrl}/auth/callback?error=${encodeURIComponent(errorMsg)}&platform=${platform}`,
+      `${clientUrl}/auth/callback?error=${encodeURIComponent(errorMsg)}&platform=${platform}`
     );
   }
 });
@@ -246,11 +262,8 @@ app.get("/auth/:platform", (req, res) => {
 
   try {
     const authState = state ? String(state) : undefined;
-
     const authUrl = oauthService.getAuthorizationUrl(platform, authState);
-
     console.log(`Redirecting to ${platform} OAuth authorization page with state: ${authState}`);
-
     res.redirect(authUrl);
   } catch (error) {
     console.error(`Error generating auth URL for ${platform}:`, error);
@@ -262,54 +275,76 @@ app.get("/auth/:platform", (req, res) => {
   }
 });
 
-
 const PORT = process.env.PORT || 4000;
+async function startServer() {
+  try {
+    await initializeMCP();
+    server.listen(PORT, () => {
+      console.log("\n" + "=".repeat(60));
+      console.log(
+        `${colors.green}${colors.bright} SuperDesign Server${colors.reset}`
+      );
+      console.log("=".repeat(60));
+      console.log(
+        `${colors.cyan} HTTP:${colors.reset}       http://localhost:${PORT}/api/trpc`
+      );
+      console.log(
+        `${colors.green} Health:${colors.reset}     http://localhost:${PORT}/health`
+      );
+      console.log(
+        `${colors.magenta} MCP:${colors.reset}        http://localhost:3846/sse`
+      );
+      console.log("=".repeat(60));
 
-server.listen(PORT, () => {
-  console.log("\n" + "=".repeat(60));
-  console.log(
-    `${colors.green}${colors.bright} SuperDesign tRPC Server${colors.reset}`,
-  );
-  console.log("=".repeat(60));
-  console.log(
-    `${colors.cyan} HTTP:${colors.reset}       http://localhost:${PORT}/api/trpc`,
-  );
-  console.log(
-    `${colors.green} Health:${colors.reset}     http://localhost:${PORT}/health`,
-  );
-  console.log("=".repeat(60));
+      const figmaConfigured = !!(
+        process.env.FIGMA_CLIENT_ID && process.env.FIGMA_CLIENT_SECRET
+      );
+      const jwtConfigured = !!process.env.JWT_SECRET;
 
-  const figmaConfigured = !!(
-    process.env.FIGMA_CLIENT_ID && process.env.FIGMA_CLIENT_SECRET
-  );
-  const jwtConfigured = !!process.env.JWT_SECRET;
+      console.log("\n" + colors.bright + "Configuration:" + colors.reset);
+      console.log(
+        ` Figma:     ${figmaConfigured ? colors.green + "✓ Configured" : colors.red + "✗ Not configured"} ${colors.reset}`
+      );
+      console.log(
+        ` JWT:       ${jwtConfigured ? colors.green + "✓ Configured" : colors.red + "✗ Not configured"} ${colors.reset}`
+      );
 
-  console.log("\n" + colors.bright + "OAuth Configuration:" + colors.reset);
+      if (!figmaConfigured || !jwtConfigured) {
+        console.log(
+          `\n${colors.yellow} Warning: Missing configuration${colors.reset}`
+        );
+        console.log(
+          `${colors.dim}Set FIGMA_CLIENT_ID, FIGMA_CLIENT_SECRET, and JWT_SECRET in .env${colors.reset}`
+        );
+      }
+
+      console.log("\n" + "=".repeat(60) + "\n");
+      console.log(`${colors.dim}Waiting for requests...${colors.reset}\n`);
+    });
+
+  } catch (error) {
+    console.error(`${colors.red}Failed to start server:${colors.reset}`, error);
+    process.exit(1);
+  }
+}
+
+startServer();
+
+const shutdown = async (signal: string) => {
   console.log(
-    ` Figma:     ${figmaConfigured ? colors.green + "✓ Configured" : colors.red + "✗ Not configured"} ${colors.reset}`,
-  );
-  console.log(
-    ` JWT:       ${jwtConfigured ? colors.green + "✓ Configured" : colors.red + "✗ Not configured"} ${colors.reset}`,
+    `\n${colors.yellow}${signal} received, shutting down gracefully...${colors.reset}`
   );
 
-  if (!figmaConfigured || !jwtConfigured) {
-    console.log(
-      `\n${colors.yellow} Warning: Missing OAuth configuration${colors.reset}`,
-    );
-    console.log(
-      `${colors.dim}Set FIGMA_CLIENT_ID, FIGMA_CLIENT_SECRET, and JWT_SECRET in .env${colors.reset}`,
-    );
+  try {
+    await shutdownMCPServer();
+  } catch (error) {
+    console.error("Error during MCP shutdown:", error);
   }
 
-  console.log("\n" + "=".repeat(60) + "\n");
-  console.log(`${colors.dim}Waiting for requests...${colors.reset}\n`);
-});
-
-const shutdown = (signal: string) => {
-  console.log(
-    `\n${colors.yellow}${signal}  received, shutting down gracefully...${colors.reset}`,
-  );
-  process.exit(0);
+  server.close(() => {
+    console.log(`${colors.green}HTTP server closed${colors.reset}`);
+    process.exit(0);
+  });
 };
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

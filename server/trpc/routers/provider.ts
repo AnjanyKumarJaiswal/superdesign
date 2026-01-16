@@ -1,14 +1,15 @@
 import { router, publicProcedure } from "@/trpc";
-import { mcp } from "@/mcp";
 
 export const providerRouters = router({
     providers: publicProcedure.query(() => {
-        const providers = mcp.getProviders();
+        // Available platforms are now statically defined
+        // The actual connection to platform MCP servers happens on-demand
+        const providers = ["figma", "framer", "canva"];
 
         return {
             providers,
             count: providers.length,
-            available: providers.length > 0
+            available: true
         };
     }),
-})
+});

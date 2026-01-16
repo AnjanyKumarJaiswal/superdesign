@@ -1,9 +1,8 @@
 import { router, publicProcedure } from "@/trpc";
-import { mcp } from "@/mcp";
 
 export const healthRouter = router({
 
-    //detecing all the health status of the server
+    //detecting all the health status of the server
     health: publicProcedure.query(() => {
 
         const endpoints = {
@@ -21,17 +20,18 @@ export const healthRouter = router({
             getFigmaEmbed: "Active - Returns embed URL for a Figma file",
         };
 
-        const providers = mcp.getProviders();
-        const mcpStatus = providers.length > 0 ? "connected" : "initializing";
+        // Available platforms are now statically defined
+        const availablePlatforms = ["figma", "framer", "canva"];
 
         return {
             ok: true,
             timestamp: new Date().toISOString(),
             endpoints,
             mcp: {
-                status: mcpStatus,
-                providers
+                status: "ready",
+                availablePlatforms,
+                note: "MCP Server runs on port 3846, platforms connect on-demand"
             }
         };
     }),
-})
+});

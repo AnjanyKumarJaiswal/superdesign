@@ -1,561 +1,339 @@
-import express from 'express';
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  Tool,
-  CallToolResult,
-  TextContent,
-  ErrorCode,
-  McpError
-} from "@modelcontextprotocol/sdk/types.js";
-import { EventEmitter } from "events";
-import type { MCPProvider, MCPTask, MCPResult, ProviderName } from "@/types";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
+import { z } from "zod";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse";
+import { FigmaProvider } from "@/mcp/providers/figmaProvider";
+import express from "express";
 
-export class UnifiedMCPServer extends EventEmitter {
-  private server: Server;
-  private httpServer?: any;
-  private providers: Record<string, MCPProvider> = {};
-  private activeJobs: Map<string, { task: MCPTask; startTime: number }> = new Map();
-  private isInitialized = false;
+const LOG = "[MCP-SERVER]";
 
-  constructor() {
-    super();
+function logError(context: string, error: unknown): void {
+    console.error(`\n${"=".repeat(60)}`);
+    console.error(`${LOG} ❌ ERROR in ${context}`);
+    console.error(`${"=".repeat(60)}`);
 
-    this.server = new Server(
-      {
-        name: "unified-design-mcp-server",
-        version: "1.0.0",
-      },
-      {
-        capabilities: {
-          tools: {},
-        },
-      }
-    );
-
-    this.setupHandlers();
-  }
-
-  async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      return;
-    }
-
-    this.isInitialized = true;
-    this.emit("initialized");
-    console.log("UnifiedMCPServer initialized");
-  }
-
-  setupHandlers(): void {
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: this.getTools(),
-      };
-    });
-
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
-      return this.executeTool(name, args || {});
-    });
-  }
-
-  async startHTTP(port: number = 3845): Promise<void> {
-    const app = express();
-    app.use(express.json());
-
-    app.get('/health', (req, res) => {
-      res.json({
-        status: 'ok',
-        server: 'unified-design-mcp-server',
-        version: '1.0.0',
-        providers: Object.keys(this.providers),
-        initialized: this.isInitialized,
-        timestamp: new Date().toISOString()
-      });
-    });
-
-    app.post('/mcp', async (req, res) => {
-      const { jsonrpc, id, method, params } = req.body;
-
-      console.log(`[MCP HTTP] Received request:`, { id, method, params });
-
-      if (jsonrpc !== '2.0') {
-        return res.status(400).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32600,
-            message: 'Invalid Request: jsonrpc must be "2.0"'
-          },
-          id: id || null
-        });
-      }
-
-      try {
-        let result: any;
-
-        switch (method) {
-          case 'initialize':
-            result = await this.handleInitialize(params);
-            break;
-
-          case 'tools/list':
-            result = { tools: this.getTools() };
-            break;
-
-          case 'tools/call':
-            if (!params?.name) {
-              throw new Error('Missing tool name in tools/call');
-            }
-            const toolResult = await this.executeTool(params.name, params.arguments || {});
-            result = toolResult;
-            break;
-
-          case 'shutdown':
-            result = { success: true };
-            setTimeout(() => this.shutdown(), 1000);
-            break;
-
-          default:
-            throw new Error(`Unknown method: ${method}`);
+    if (error instanceof Error) {
+        console.error(`Message: ${error.message}`);
+        console.error(`Name: ${error.name}`);
+        if (error.stack) {
+            console.error(`Stack:\n${error.stack}`);
         }
-
-        res.json({
-          jsonrpc: '2.0',
-          result,
-          id
-        });
-
-      } catch (error) {
-        console.error(`[MCP HTTP] Error handling ${method}:`, error);
-        res.status(400).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32000,
-            message: error instanceof Error ? error.message : 'Unknown error',
-            data: error instanceof Error ? error.stack : undefined
-          },
-          id: id || null
-        });
-      }
-    });
-
-    return new Promise((resolve) => {
-      this.httpServer = app.listen(port, () => {
-        console.log(`\n✅ MCP HTTP Server listening on http://127.0.0.1:${port}/mcp`);
-        console.log(`   Health endpoint: http://127.0.0.1:${port}/health`);
-        resolve();
-      });
-    });
-  }
-
-  private async handleInitialize(params: any): Promise<any> {
-    console.log('[MCP] Initialize request with params:', params);
-
-    if (!params || !params.protocolVersion) {
-      console.warn('[MCP] Initialize called without protocolVersion, using default');
+        const errorObj = error as any;
+        if (errorObj.code) console.error(`Code: ${errorObj.code}`);
+        if (errorObj.data) console.error(`Data: ${JSON.stringify(errorObj.data, null, 2)}`);
+    } else {
+        console.error(`Raw error:`, error);
     }
+    console.error(`${"=".repeat(60)}\n`);
+}
 
-    await this.initialize();
+export const mcpServer = new McpServer({
+    name: "superDesign-MCP-Server",
+    version: "1.0.0"
+});
 
-    return {
-      protocolVersion: '2024-11-05',
-      serverInfo: {
-        name: 'unified-design-mcp-server',
-        version: '1.0.0'
-      },
-      capabilities: {
-        tools: {},
-        roots: { listChanged: true },
-        sampling: {}
-      }
-    };
-  }
+const platformClients: Record<string, FigmaProvider> = {};
 
-  getTools(): Tool[] {
-    const baseTools: Tool[] = [
-      {
-        name: "design_get_providers",
-        description: "Get list of available design platform providers",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-      {
-        name: "design_get_status",
-        description: "Get server status and active jobs",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-    ];
+async function initializePlatformClient(platform: string, accessToken?: string): Promise<FigmaProvider | null> {
+    console.log(`${LOG} initializePlatformClient called`);
+    console.log(`${LOG}    Platform: ${platform}`);
+    console.log(`${LOG}    Has accessToken: ${!!accessToken}`);
 
-    if (Object.keys(this.providers).length > 0) {
-      baseTools.push(
-        {
-          name: "design_create_element",
-          description: "Create a new design element using a registered provider",
-          inputSchema: {
-            type: "object",
-            properties: {
-              provider: {
-                type: "string",
-                enum: Object.keys(this.providers),
-                description: "The provider to use for creating the element"
-              },
-              elementType: {
-                type: "string",
-                description: "Type of element to create (e.g., 'rectangle', 'text', 'frame')"
-              },
-              properties: {
-                type: "object",
-                description: "Properties for the element (e.g., dimensions, colors, text content)"
-              },
-              fileKey: {
-                type: "string",
-                description: "File key or ID where the element should be created"
-              }
-            },
-            required: ["provider", "elementType"],
-          },
-        },
-        {
-          name: "design_process_prompt",
-          description: "Process a natural language prompt to create or modify design elements",
-          inputSchema: {
-            type: "object",
-            properties: {
-              provider: {
-                type: "string",
-                enum: Object.keys(this.providers),
-                description: "The provider to use"
-              },
-              fileKey: {
-                type: "string",
-                description: "File key or ID to work with"
-              },
-              prompt: {
-                type: "string",
-                description: "Natural language description of what to create or modify"
-              },
-              accessToken: {
-                type: "string",
-                description: "Access token for the design platform API"
-              }
-            },
-            required: ["provider", "fileKey", "prompt"],
-          },
-        }
-      );
-    }
-
-    return baseTools;
-  }
-
-  async executeTool(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
-    try {
-      console.log(`[MCP] Executing tool: ${name} with args:`, args);
-
-      switch (name) {
-        case "design_get_providers":
-          return this.handleGetProviders();
-
-        case "design_get_status":
-          return this.handleGetStatus();
-
-        case "design_create_element":
-          return await this.handleCreateElement(args);
-
-        case "design_process_prompt":
-          return await this.handleProcessPrompt(args);
-
-        default:
-          throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
-      }
-    } catch (error) {
-      console.error(`[MCP] Error executing tool ${name}:`, error);
-      if (error instanceof McpError) {
-        throw error;
-      }
-      throw new McpError(
-        ErrorCode.InternalError,
-        error instanceof Error ? error.message : "Unknown error"
-      );
-    }
-  }
-
-  private async handleCreateElement(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, elementType, properties, fileKey } = args;
-
-    if (!provider || typeof provider !== 'string') {
-      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid provider parameter');
-    }
-
-    if (!elementType || typeof elementType !== 'string') {
-      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid elementType parameter');
-    }
-
-    const providerInstance = this.providers[provider];
-    if (!providerInstance) {
-      throw new McpError(ErrorCode.InvalidParams, `Provider '${provider}' not found`);
-    }
-
-    const task: MCPTask = {
-      id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      provider: provider as ProviderName,
-      action: 'create',
-      payload: {
-        elementType,
-        properties: properties || {},
-        fileKey
-      },
-      parameters: {
-        elementType,
-        properties: properties || {},
-        fileKey
-      },
-      timestamp: Date.now()
-    };
-
-    const result = await this.execute(task);
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(result, null, 2),
-        } as TextContent,
-      ],
-    };
-  }
-
-  private async handleProcessPrompt(args: Record<string, unknown>): Promise<CallToolResult> {
-    const { provider, fileKey, prompt, accessToken } = args;
-
-    if (!provider || typeof provider !== 'string') {
-      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid provider parameter');
-    }
-
-    if (!fileKey || typeof fileKey !== 'string') {
-      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid fileKey parameter');
-    }
-
-    if (!prompt || typeof prompt !== 'string') {
-      throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid prompt parameter');
-    }
-
-    const providerInstance = this.providers[provider];
-    if (!providerInstance) {
-      throw new McpError(ErrorCode.InvalidParams, `Provider '${provider}' not found`);
-    }
-
-    const task: MCPTask = {
-      id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      provider: provider as ProviderName,
-      action: 'process_prompt',
-      payload: {
-        fileKey,
-        prompt,
-        accessToken
-      },
-      parameters: {
-        fileKey,
-        prompt,
-        accessToken
-      },
-      timestamp: Date.now()
-    };
-
-    const result = await this.execute(task);
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(result, null, 2),
-        } as TextContent,
-      ],
-    };
-  }
-
-  handleGetProviders(): CallToolResult {
-    const providers = Object.keys(this.providers).map(name => ({
-      name,
-      providerName: this.providers[name].providerName,
-    }));
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({ providers }, null, 2),
-        } as TextContent,
-      ],
-    };
-  }
-
-  getProviders(): string[] {
-    return Object.keys(this.providers);
-  }
-
-  getProvider(name: string): MCPProvider | undefined {
-    return this.providers[name];
-  }
-
-  handleGetStatus(): CallToolResult {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              status: "running",
-              initialized: this.isInitialized,
-              providers: Object.keys(this.providers),
-              activeJobs: this.activeJobs.size,
-              uptime: process.uptime(),
-            },
-            null,
-            2
-          ),
-        } as TextContent,
-      ],
-    };
-  }
-
-  async execute(task: MCPTask): Promise<MCPResult> {
-    const provider = this.providers[task.provider];
-
-    if (!provider) {
-      const errorResult: MCPResult = {
-        taskId: task.id,
-        status: "failed",
-        error: `No provider registered for ${task.provider}`,
-        completedAt: Date.now(),
-      };
-
-      this.emit("taskError", {
-        provider: task.provider,
-        task,
-        error: errorResult.error,
-      });
-
-      return errorResult;
-    }
-
-    this.activeJobs.set(task.id, { task, startTime: Date.now() });
-    this.emit("taskStart", { provider: task.provider, task });
-
-    try {
-      const result = await provider.runTask(task);
-      result.completedAt = Date.now();
-      this.activeJobs.delete(task.id);
-      this.emit("taskComplete", { provider: task.provider, task, result });
-      return result;
-    } catch (error) {
-      this.activeJobs.delete(task.id);
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      const errorResult: MCPResult = {
-        taskId: task.id,
-        status: "failed",
-        error: errorMessage,
-        completedAt: Date.now(),
-      };
-      this.emit("taskError", { provider: task.provider, task, error: errorMessage });
-      return errorResult;
-    }
-  }
-
-  async registerProvider(name: string, provider: MCPProvider): Promise<void> {
-    try {
-      if (provider.initialize) {
+    if (platform === "figma") {
         try {
-          await provider.initialize();
-          console.log(`Provider ${name} initialized successfully`);
-        } catch (initError) {
-          console.warn(`Provider ${name} initialization failed but will continue:`, initError);
+            if (!platformClients.figma) {
+                const figmaMCPServerURL = process.env.FIGMA_MCP_URL || "http://127.0.0.1:3845/sse";
+                console.log(`${LOG}    Creating new FigmaProvider with URL: ${figmaMCPServerURL}`);
+
+                platformClients.figma = new FigmaProvider({
+                    mcpServerUrl: figmaMCPServerURL,
+                    accessToken: accessToken
+                });
+            }
+
+            if (!platformClients.figma.isReady()) {
+                console.log(`${LOG}    Initializing FigmaProvider...`);
+                await platformClients.figma.initialize();
+                console.log(`${LOG}    FigmaProvider ready: ${platformClients.figma.isReady()}`);
+            } else {
+                console.log(`${LOG}    FigmaProvider already ready`);
+            }
+
+            return platformClients.figma;
+        } catch (error) {
+            logError(`initializePlatformClient(${platform})`, error);
+            throw error;
         }
-      }
-
-      this.providers[name] = provider;
-
-      provider.on("taskStart", (task: MCPTask) => {
-        this.emit("taskStart", { provider: name, task });
-      });
-      provider.on("taskProgress", (data: { task: MCPTask; progress: string; data?: unknown }) => {
-        this.emit("taskProgress", { provider: name, ...data });
-      });
-      provider.on("taskComplete", (data: { task: MCPTask; result: MCPResult }) => {
-        this.emit("taskComplete", { provider: name, ...data });
-      });
-      provider.on("taskError", (data: { task: MCPTask; error: string }) => {
-        this.emit("taskError", { provider: name, ...data });
-      });
-
-      console.log(`Registered provider: ${name}`);
-    } catch (error) {
-      console.error(`Failed to register provider ${name}:`, error);
-      throw error;
-    }
-  }
-
-  async unregisterProvider(name: string): Promise<void> {
-    const provider = this.providers[name];
-    if (provider) {
-      if (provider.shutdown) {
-        await provider.shutdown();
-      }
-      provider.removeAllListeners();
-      delete this.providers[name];
-      console.log(`Unregistered provider: ${name}`);
-    }
-  }
-
-  async start(): Promise<void> {
-    if (this.isInitialized) {
-      return;
     }
 
-    const transport = new StdioServerTransport();
-    await this.server.connect(transport);
+    console.log(`${LOG}    Platform "${platform}" not supported`);
+    return null;
+}
 
-    this.isInitialized = true;
-    this.emit("initialized");
-    console.error("UnifiedMCPServer started on stdio");
-  }
+mcpServer.registerTool(
+    "get_platform_tools",
+    {
+        title: "Get Platform Tools",
+        description: "Fetches all available tools from the specified design platform's MCP server",
+        inputSchema: {
+            platform: z.string(),
+            accessToken: z.string().optional()
+        }
+    },
+    async ({ platform, accessToken }) => {
+        console.log(`\n${LOG} ────────────────────────────────────────`);
+        console.log(`${LOG} TOOL CALL: get_platform_tools`);
+        console.log(`${LOG}    Platform: ${platform}`);
+        console.log(`${LOG} ────────────────────────────────────────`);
 
-  async shutdown(): Promise<void> {
-    console.log("Shutting down UnifiedMCPServer...");
+        try {
+            const client = await initializePlatformClient(platform, accessToken);
 
-    if (this.httpServer) {
-      this.httpServer.close();
-      console.log("HTTP server closed");
+            if (!client) {
+                console.error(`${LOG}    Platform ${platform} not supported`);
+                return {
+                    content: [{
+                        type: "text" as const,
+                        text: JSON.stringify({ error: `Platform ${platform} not supported` })
+                    }]
+                };
+            }
+
+            console.log(`${LOG}    Getting tools from FigmaMCPClient...`);
+            const mcpClient = client.getMCPClient();
+            const tools = await mcpClient.listTools();
+
+            console.log(`${LOG}    ✓ Got ${tools.length} tools from ${platform}`);
+            tools.forEach((t: any) => {
+                console.log(`${LOG}       - ${t.name}`);
+            });
+
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: JSON.stringify({ platform, tools })
+                }]
+            };
+        } catch (error) {
+            logError(`get_platform_tools(${platform})`, error);
+            const errorMsg = error instanceof Error ? error.message : "Unknown error";
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: JSON.stringify({ error: errorMsg, platform })
+                }]
+            };
+        }
     }
+);
 
-    const providerNames = Object.keys(this.providers);
-    await Promise.all(providerNames.map(name => this.unregisterProvider(name)));
+mcpServer.registerTool(
+    "execute_platform_tool",
+    {
+        title: "Execute Platform Tools",
+        description: "Executes a specific tool on the design platform",
+        inputSchema: {
+            platform: z.string(),
+            toolName: z.string(),
+            toolArgs: z.record(z.any()),
+            accessToken: z.string(),
+        },
+    },
+    async ({ platform, toolName, toolArgs, accessToken }) => {
+        console.log(`\n${LOG} ────────────────────────────────────────`);
+        console.log(`${LOG} TOOL CALL: execute_platform_tool`);
+        console.log(`${LOG}    Platform: ${platform}`);
+        console.log(`${LOG}    Tool: ${toolName}`);
+        console.log(`${LOG}    Args: ${JSON.stringify(toolArgs).substring(0, 100)}...`);
+        console.log(`${LOG} ────────────────────────────────────────`);
 
-    await this.server.close();
-    this.isInitialized = false;
-    this.emit("shutdown");
-    console.log("UnifiedMCPServer shut down");
-  }
+        try {
+            const client = await initializePlatformClient(platform, accessToken);
 
-  getActiveJobs(): Record<string, { taskId: string; provider: string; action: string; duration: number }> {
-    const jobs: Record<string, { taskId: string; provider: string; action: string; duration: number }> = {};
+            if (!client) {
+                console.error(`${LOG}    Platform ${platform} not supported`);
+                return {
+                    content: [{
+                        type: "text" as const,
+                        text: JSON.stringify({ error: `Platform ${platform} not supported` })
+                    }]
+                };
+            }
 
-    for (const [id, jobInfo] of this.activeJobs.entries()) {
-      jobs[id] = {
-        taskId: jobInfo.task.id,
-        provider: jobInfo.task.provider,
-        action: jobInfo.task.action,
-        duration: Date.now() - jobInfo.startTime,
-      };
+            console.log(`${LOG}    Calling tool "${toolName}" on Figma MCP...`);
+            const mcpClient = client.getMCPClient();
+            const res = await mcpClient.callTool(toolName, toolArgs);
+
+            console.log(`${LOG}    ✓ Tool "${toolName}" executed successfully`);
+            console.log(`${LOG}    Response: ${JSON.stringify(res).substring(0, 200)}...`);
+
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: JSON.stringify({ success: true, result: res })
+                }]
+            };
+        } catch (error) {
+            logError(`execute_platform_tool(${toolName})`, error);
+            const errorMsg = error instanceof Error ? error.message : "Unknown error";
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: JSON.stringify({ success: false, error: errorMsg })
+                }]
+            };
+        }
     }
+);
 
-    return jobs;
-  }
+mcpServer.registerTool(
+    "get_server_status",
+    {
+        title: "Getting Server status",
+        description: "Returns the current status of the SuperDesign MCP Server"
+    },
+    async () => {
+        const connectedPlatforms = Object.keys(platformClients).filter(
+            platform => platformClients[platform]?.isReady?.()
+        );
+        return {
+            content: [{
+                type: "text" as const,
+                text: JSON.stringify({
+                    status: "running",
+                    server: "superDesign-MCP-Server",
+                    version: "1.0.0",
+                    connectedPlatforms,
+                    availablePlatforms: ["figma", "framer", "canva"],
+                    uptime: process.uptime()
+                })
+            }]
+        };
+    }
+);
+
+let httpServer: any = null;
+// Map sessionId to transport for message routing
+const activeTransports: Map<string, SSEServerTransport> = new Map();
+
+export async function startMCPServer(port: number = 3846): Promise<void> {
+    const app = express();
+
+    app.get("/sse", async (req, res) => {
+        console.log(`${LOG} New SSE connection request`);
+
+        try {
+            const transport = new SSEServerTransport("/messages", res);
+            console.log(`${LOG} SSE transport created, starting connection...`);
+
+            await mcpServer.connect(transport);
+
+            const sessionId = (transport as any).sessionId || `session_${Date.now()}`;
+            activeTransports.set(sessionId, transport);
+            console.log(`${LOG} SSE session started: ${sessionId}`);
+            console.log(`${LOG} MCP server connected to transport: ${sessionId}`);
+
+            res.on("close", () => {
+                console.log(`${LOG} SSE connection closed: ${sessionId}`);
+                activeTransports.delete(sessionId);
+            });
+
+        } catch (error) {
+            logError("SSE connection setup", error);
+            if (!res.headersSent) {
+                res.status(500).send("SSE connection failed");
+            }
+        }
+    });
+
+    app.post("/messages", async (req, res) => {
+        const sessionId = req.query.sessionId as string;
+
+        if (!sessionId) {
+            console.error(`${LOG} /messages: No sessionId provided`);
+            res.status(400).json({ error: "Missing sessionId" });
+            return;
+        }
+
+        const transport = activeTransports.get(sessionId);
+
+        if (!transport) {
+            console.error(`${LOG} /messages: No transport found for session: ${sessionId}`);
+            res.status(404).json({ error: "Session not found" });
+            return;
+        }
+
+        try {
+            await transport.handlePostMessage(req, res);
+        } catch (error) {
+            logError("/messages handling", error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: "Failed to process message" });
+            }
+        }
+    });
+
+    app.get("/health", (req, res) => {
+        res.json({
+            status: "ok",
+            server: "superDesign-MCP-Server",
+            version: "1.0.0",
+            connectedClients: activeTransports.size,
+            activeSessions: Array.from(activeTransports.keys()),
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    return new Promise(async (resolve) => {
+        httpServer = app.listen(port, async () => {
+            console.log(`\n${"=".repeat(60)}`);
+            console.log(`  SuperDesign MCP Server`);
+            console.log(`${"=".repeat(60)}`);
+            console.log(`  🌐 Server:     http://localhost:${port}`);
+            console.log(`  📡 SSE:        http://localhost:${port}/sse`);
+            console.log(`  💚 Health:     http://localhost:${port}/health`);
+            console.log(`${"=".repeat(60)}\n`);
+
+            console.log(`${LOG} Testing Figma MCP connection...`);
+            const figmaMCPUrl = process.env.FIGMA_MCP_URL || "http://127.0.0.1:3845/sse";
+            console.log(`${LOG} Figma MCP URL: ${figmaMCPUrl}`);
+
+            try {
+                const figmaProvider = new FigmaProvider({
+                    mcpServerUrl: figmaMCPUrl
+                });
+                await figmaProvider.initialize();
+
+                if (figmaProvider.isReady()) {
+                    console.log(`${LOG} ✅ Figma MCP Server: CONNECTED`);
+                    const mcpClient = figmaProvider.getMCPClient();
+                    const tools = await mcpClient.listTools();
+                    console.log(`${LOG}    Available tools: ${tools.length}`);
+                    platformClients.figma = figmaProvider;
+                } else {
+                    console.log(`${LOG} ⚠️  Figma MCP Server: Initialized but not fully connected`);
+                    platformClients.figma = figmaProvider;
+                }
+            } catch (error) {
+                logError("Figma MCP connection test", error);
+                console.log(`${LOG}    Make sure Figma MCP server is running on port 3845`);
+            }
+            console.log("");
+            resolve();
+        });
+    });
+}
+
+export async function shutdownMCPServer(): Promise<void> {
+    console.log(`${LOG} Shutting down...`);
+    for (const [platform, client] of Object.entries(platformClients)) {
+        if (client?.shutdown) {
+            await client.shutdown();
+            console.log(`${LOG} ${platform} client disconnected`);
+        }
+    }
+    if (httpServer) {
+        httpServer.close();
+        console.log(`${LOG} HTTP server closed`);
+    }
+    console.log(`${LOG} Shutdown complete`);
 }

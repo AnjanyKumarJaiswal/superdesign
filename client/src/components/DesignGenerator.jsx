@@ -4,14 +4,14 @@ import { isAuthenticated, getCurrentUser } from "../utils/auth";
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
 
 const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
-  const [taskId, setTaskId] = useState(null);
+  const [result, setResult] = useState(null);
   const authenticated = isAuthenticated();
   const user = getCurrentUser();
 
   const generateDesign = trpc.generateDesign.useMutation({
     onSuccess: (data) => {
-      console.log("Design generation started:", data);
-      setTaskId(data.taskId);
+      console.log("Design generation completed:", data);
+      setResult(data);
     },
     onError: (error) => {
       console.error("Design generation failed:", error);
@@ -21,19 +21,13 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
     },
   });
 
-  const jobStatus = trpc.getJobStatus.useQuery(
-    { jobId: taskId },
-    {
-      enabled: !!taskId,
-      refetchInterval: 2000,
-    }
-  );
-
   const handleGenerate = async () => {
     if (!authenticated) {
       alert("Please log in with Figma first");
       return;
     }
+
+    setResult(null);
 
     generateDesign.mutate({
       prompt,
@@ -89,39 +83,7 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
         </div>
       )}
 
-      {taskId && jobStatus.data && (
-        <div className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
-          <div className="flex items-center gap-3">
-            {jobStatus.data.status === "running" && (
-              <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-            )}
-            {jobStatus.data.status === "completed" && (
-              <CheckCircle className="w-5 h-5 text-green-400" />
-            )}
-            {jobStatus.data.status === "failed" && (
-              <AlertCircle className="w-5 h-5 text-red-400" />
-            )}
-            <div className="flex-1">
-              <p className="text-white text-sm font-medium">
-                Status: {jobStatus.data.status}
-              </p>
-              {jobStatus.data.result?.message && (
-                <p className="text-gray-400 text-xs mt-1">
-                  {jobStatus.data.result.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-3 pt-3 border-t border-white/10">
-            <p className="text-gray-500 text-xs">
-              Task ID: <span className="text-gray-400">{taskId}</span>
-            </p>
-          </div>
-        </div>
-      )}
-
-      {jobStatus.data?.status === "completed" && (
+      {result && (
         <div className="flex items-start gap-3 px-4 py-3 bg-green-500/10 border border-green-500/30 rounded-xl">
           <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
           <div>
@@ -129,7 +91,10 @@ const DesignGenerator = ({ prompt, fileId, platform = "figma" }) => {
               Design Generated Successfully!
             </p>
             <p className="text-green-400 text-xs mt-1">
-              Check your {platform} file to see the results.
+              {result.result || "Check your Figma file to see the results."}
+            </p>
+            <p className="text-gray-500 text-xs mt-2">
+              Task ID: {result.taskId} • Executed {result.executedSteps} steps
             </p>
           </div>
         </div>
