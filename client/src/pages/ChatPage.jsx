@@ -44,15 +44,17 @@ const ChatPage = () => {
 
   const generateDesign = trpc.generateDesign.useMutation({
     onSuccess: (data) => {
-      console.log("Design generation started:", data);
+      console.log("Design generation completed:", data);
       setCurrentTaskId(data.taskId);
 
       const aiMessage = {
         id: Date.now() + 1,
         role: "assistant",
-        content: `Design generation started! Task ID: ${data.taskId}`,
+        content: data.status === "completed"
+          ? `✅ Design generated successfully! Executed ${data.executedSteps || 0} steps. Check your Figma file.`
+          : `Design task started: ${data.taskId}`,
         taskId: data.taskId,
-        status: "running",
+        status: data.status,
         timestamp: new Date(),
       };
 
@@ -79,47 +81,6 @@ const ChatPage = () => {
       setIsGenerating(false);
     },
   });
-
-  const jobStatus = trpc.getJobStatus.useQuery(
-    { jobId: currentTaskId || "" },
-    {
-      enabled: !!currentTaskId,
-      refetchInterval: (data) => {
-        if (data?.status === "completed" || data?.status === "failed") {
-          return false;
-        }
-        return 2000;
-      },
-    },
-  );
-
-  useEffect(() => {
-    if (jobStatus.data && currentTaskId) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const messageIndex = updated.findIndex(
-          (msg) => msg.taskId === currentTaskId,
-        );
-
-        if (messageIndex !== -1) {
-          const message = updated[messageIndex];
-          message.status = jobStatus.data.status;
-
-          if (jobStatus.data.status === "completed") {
-            message.content =
-              "✅ Design generated successfully! Check your Figma file.";
-          } else if (jobStatus.data.status === "failed") {
-            message.content = `❌ Generation failed: ${jobStatus.data.error || "Unknown error"}`;
-            message.error = true;
-          } else if (jobStatus.data.result?.message) {
-            message.content = `⏳ ${jobStatus.data.result.message}`;
-          }
-        }
-
-        return updated;
-      });
-    }
-  }, [jobStatus.data, currentTaskId]);
 
   useEffect(() => {
     let targetX = 0,
@@ -152,8 +113,14 @@ const ChatPage = () => {
     };
   }, []);
 
+  // Track if initial prompt was processed
+  const initialPromptProcessed = useRef(false);
+
   useEffect(() => {
-    if (location.state?.initialPrompt && !messages.length) {
+    // Only run once for the initial prompt
+    if (location.state?.initialPrompt && !messages.length && !initialPromptProcessed.current) {
+      initialPromptProcessed.current = true;
+
       const initialPrompt = location.state.initialPrompt;
       const platform = location.state?.platform || user?.platform || "figma";
 
@@ -191,8 +158,8 @@ const ChatPage = () => {
         platform: platform,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state?.initialPrompt, messages.length, authenticated, generateDesign]);
+  }, [location.state?.initialPrompt, authenticated, fileId, user?.platform]);
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -511,8 +478,8 @@ const ChatPage = () => {
                 >
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-3 ${message.role === "user"
-                        ? "bg-white/10 text-white border border-white/20"
-                        : "bg-white/5 text-gray-200 border border-white/10"
+                      ? "bg-white/10 text-white border border-white/20"
+                      : "bg-white/5 text-gray-200 border border-white/10"
                       }`}
                   >
                     {message.platform && (

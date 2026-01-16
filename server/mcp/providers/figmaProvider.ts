@@ -17,7 +17,6 @@ const ACTION_TO_TOOL_MAP: Record<string, string> = {
 };
 
 export class FigmaProvider extends EventEmitter implements MCPProvider {
-
   providerName: string = "Figma";
   private mcpClient: FigmaMCPClient;
   private isConnected = false;
@@ -32,7 +31,7 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
   }) {
     super();
 
-    const mcpUrl = 'http://127.0.0.1:3845/sse';
+    const mcpUrl = config?.mcpServerUrl || 'http://127.0.0.1:3845/sse';
 
     this.mcpClient = new FigmaMCPClient(
       mcpUrl,
@@ -45,96 +44,78 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
     console.log(`FigmaProvider initialized with MCP URL: ${mcpUrl}, Host URL: ${this.hostUrl}`);
   }
 
+  private emitInfo(message: string): void {
+    console.log(message);
+    this.emit("info", message);
+  }
+
+  private emitError(message: string, error?: Error): void {
+    console.error(message, error);
+    this.emit("error", message);
+  }
+
+  private emitTaskProgress(task: MCPTask, progress: string, data?: any): void {
+    this.emit("taskProgress", { task, progress, data });
+  }
+
   async initialize(): Promise<void> {
     try {
-      console.log("Initializing Figma provider...");
-      this.emit("info", "Connecting to Figma MCP Server...");
+      this.emitInfo("Connecting to Figma MCP Server...");
 
-      let isAlive = false;
-      try {
-        isAlive = await this.mcpClient.ping();
-        console.log(`Ping result: ${isAlive ? 'Success' : 'Failed'}`);
-      } catch (pingError) {
-        console.warn("Failed to ping Figma MCP Server:", pingError);
-        console.warn("Continuing in embed-only mode");
-      }
+      const isAlive = await this.mcpClient.ping().catch(() => false);
 
       if (!isAlive) {
-        console.warn("Figma MCP Server is not responding, initializing in embed-only mode");
         this.isConnected = false;
-        this.emit("info", "Figma provider initialized in embed-only mode");
+        this.emitInfo("Figma provider initialized in embed-only mode");
         return;
       }
 
-      try {
-        const tools = await this.mcpClient.listTools();
-        this.isConnected = true;
-
-        if (Array.isArray(tools) && tools.length > 0) {
-          console.log(`Successfully connected to Figma MCP server. Found ${tools.length} tools.`);
-          this.emit("info", `Connected to Figma MCP Server. Available tools: ${tools.length}`);
-        } else {
-          console.warn("Connected to Figma MCP server but no tools were returned");
-          this.emit("info", "Connected to Figma MCP Server but no tools available");
-        }
-      } catch (toolsError) {
-        console.warn("Failed to list Figma MCP tools:", toolsError);
-        this.isConnected = false;
-      }
+      const tools = await this.mcpClient.listTools().catch(() => []);
+      this.isConnected = tools.length > 0;
 
       if (this.isConnected) {
-        console.log("✅ Figma provider initialized successfully");
+        this.emitInfo(`Connected to Figma MCP Server. Available tools: ${tools.length}`);
       } else {
-        console.warn("⚠️ Figma provider initialized in embed-only mode");
+        this.emitInfo("Connected to Figma MCP Server but no tools available");
       }
     } catch (error) {
       this.isConnected = false;
-      const message = error instanceof Error ? error.message : "Unknown error";
-      console.warn(`Figma provider initialized in embed-only mode: ${message}`);
-      this.emit("info", `Figma provider initialized in embed-only mode: ${message}`);
+      this.emitInfo(`Figma provider initialized in embed-only mode: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }
 
   async getEmbedUrl(fileId: string, accessToken?: string): Promise<string> {
-    try {
-      if (!fileId) {
-        throw new Error("File ID is required to generate embed URL");
-      }
-
-      const fileKey = this.extractFileKey(fileId);
-      if (!fileKey) {
-        throw new Error(`Could not extract a valid file key from: ${fileId}`);
-      }
-
-      const embedUrl = this.generateEmbedUrl(fileId, accessToken, undefined);
-
-      console.log(`Embed URL generated: ${embedUrl}`);
-
-      return embedUrl;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      this.emit("error", `Failed to generate Figma embed URL: ${message}`);
-      throw error;
+    if (!fileId) {
+      throw new Error("File ID is required to generate embed URL");
     }
+
+    const fileKey = this.extractFileKey(fileId);
+    if (!fileKey) {
+      throw new Error(`Could not extract a valid file key from: ${fileId}`);
+    }
+
+    const embedUrl = this.generateEmbedUrl(fileId, accessToken, undefined);
+    console.log(`Embed URL generated: ${embedUrl}`);
+    return embedUrl;
   }
 
   isReady(): boolean {
     return this.isConnected;
   }
 
-  async runTask(task: MCPTask): Promise<MCPResult> {
-    if (!this.isConnected && task.action !== 'generateEmbedUrl') {
-      return {
-        taskId: task.id,
-        status: "failed",
-        error: "Figma provider not connected. Call initialize() first.",
-        completedAt: Date.now(),
-      };
-    }
 
+  private ensureConnected(task: MCPTask): void {
+    if (!this.isConnected && task.action !== 'generateEmbedUrl') {
+      throw new Error("Figma provider not connected. Call initialize() first.");
+    }
+  }
+
+  async runTask(task: MCPTask): Promise<MCPResult> {
     this.emit("taskStart", task);
 
     try {
+      this.ensureConnected(task);
+
       if (task.action === 'processPrompt') {
         return this.handlePromptTask(task);
       }
@@ -143,119 +124,92 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
         return this.handleEmbedUrlTask(task);
       }
 
-      const toolName = this.mapActionToTool(task.action);
-
-      this.emit("taskProgress", {
-        task,
-        progress: `Calling Figma MCP tool: ${toolName}`,
-        data: { tool: toolName, action: task.action }
-      });
-
-      const toolArgs = this.prepareToolArguments(task);
-      const mcpResult = await this.mcpClient.callTools(toolName, toolArgs);
-
-      this.emit("taskProgress", {
-        task,
-        progress: "Processing Figma response...",
-        data: { result: mcpResult }
-      });
-
-      const result: MCPResult = {
-        taskId: task.id,
-        status: "completed",
-        data: mcpResult,
-        completedAt: Date.now(),
-      };
-
-      this.emit("taskComplete", { task, result });
-      return result;
+      return this.handleMCPToolTask(task);
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
-      const result: MCPResult = {
-        taskId: task.id,
-        status: "failed",
-        error: errorMessage,
-        completedAt: Date.now(),
-      };
-
-      this.emit("taskError", { task, error: errorMessage });
-      return result;
+      return this.createErrorResult(task, error);
     }
+  }
+
+  private async handleMCPToolTask(task: MCPTask): Promise<MCPResult> {
+    const toolName = this.mapActionToTool(task.action);
+
+    this.emitTaskProgress(task, `Calling Figma MCP tool: ${toolName}`, {
+      tool: toolName,
+      action: task.action
+    });
+
+    const toolArgs = this.prepareToolArguments(task);
+    const mcpResult = await this.mcpClient.callTools(toolName, toolArgs);
+
+    this.emitTaskProgress(task, "Processing Figma response...", { result: mcpResult });
+
+    const result: MCPResult = {
+      taskId: task.id,
+      status: "completed",
+      data: mcpResult,
+      completedAt: Date.now(),
+    };
+
+    this.emit("taskComplete", { task, result });
+    return result;
   }
 
   private async handlePromptTask(task: MCPTask): Promise<MCPResult> {
-    try {
-      const { fileId, prompt, accessToken } = task.payload as {
-        fileId: string;
-        prompt: string;
-        accessToken: string;
-      };
+    const { fileId, prompt } = task.payload as { fileId: string; prompt: string };
 
-      if (!fileId || !prompt) {
-        throw new Error("Missing required parameters: fileId and prompt");
-      }
-
-      this.emit("taskProgress", {
-        task,
-        progress: `Processing prompt: "${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"`,
-      });
-
-      const fileKey = this.extractFileKey(fileId);
-      const result = await this.mcpClient.processPrompt(fileKey, prompt);
-
-      return {
-        taskId: task.id,
-        status: "completed",
-        data: result,
-        completedAt: Date.now(),
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      return {
-        taskId: task.id,
-        status: "failed",
-        error: errorMessage,
-        completedAt: Date.now(),
-      };
+    if (!fileId || !prompt) {
+      throw new Error("Missing required parameters: fileId and prompt");
     }
+
+    const truncatedPrompt = prompt.length > 50 ? `${prompt.substring(0, 50)}...` : prompt;
+    this.emitTaskProgress(task, `Processing prompt: "${truncatedPrompt}"`);
+
+    const fileKey = this.extractFileKey(fileId);
+    const result = await this.mcpClient.processPrompt(fileKey, prompt);
+
+    return {
+      taskId: task.id,
+      status: "completed",
+      data: result,
+      completedAt: Date.now(),
+    };
   }
 
   private async handleEmbedUrlTask(task: MCPTask): Promise<MCPResult> {
-    try {
-      const { fileId, nodeId, accessToken } = task.payload as {
-        fileId: string;
-        nodeId?: string;
-        accessToken?: string;
-      };
+    const { fileId, nodeId, accessToken } = task.payload as {
+      fileId: string;
+      nodeId?: string;
+      accessToken?: string;
+    };
 
-      if (!fileId) {
-        throw new Error("Missing required parameter: fileId");
-      }
-
-      this.emit("taskProgress", {
-        task,
-        progress: `Generating embed URL for file: ${fileId}`,
-      });
-
-      const embedUrl = this.generateEmbedUrl(fileId, accessToken, nodeId);
-
-      return {
-        taskId: task.id,
-        status: "completed",
-        data: { embedUrl },
-        completedAt: Date.now(),
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      return {
-        taskId: task.id,
-        status: "failed",
-        error: errorMessage,
-        completedAt: Date.now(),
-      };
+    if (!fileId) {
+      throw new Error("Missing required parameter: fileId");
     }
+
+    this.emitTaskProgress(task, `Generating embed URL for file: ${fileId}`);
+    const embedUrl = this.generateEmbedUrl(fileId, accessToken, nodeId);
+
+    return {
+      taskId: task.id,
+      status: "completed",
+      data: { embedUrl },
+      completedAt: Date.now(),
+    };
+  }
+
+  private createErrorResult(task: MCPTask, error: unknown): MCPResult {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+    const result: MCPResult = {
+      taskId: task.id,
+      status: "failed",
+      error: errorMessage,
+      completedAt: Date.now(),
+    };
+
+    this.emit("taskError", { task, error: errorMessage });
+    return result;
   }
 
   private mapActionToTool(action: string): string {
@@ -265,7 +219,6 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
       if (action === 'generateEmbedUrl') {
         return 'internal_embed_url';
       }
-
       throw new Error(`Unknown action: ${action}. Cannot map to Figma MCP tool.`);
     }
 
@@ -292,84 +245,74 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
     };
 
     const typedPayload = payload as PayloadWithProperties;
-
     const args = {
       fileKey: payload.fileKey || this.fileKey,
       ...payload
     };
 
-    switch (action) {
-      case 'createElement':
-      case 'createRectangle':
-        return {
-          fileKey: args.fileKey,
-          type: payload.elementType || 'RECTANGLE',
-          properties: {
-            width: typedPayload.properties?.width || 100,
-            height: typedPayload.properties?.height || 100,
-            x: typedPayload.properties?.x || 0,
-            y: typedPayload.properties?.y || 0,
-            fills: typedPayload.properties?.fill ? [{
-              type: 'SOLID',
-              color: this.hexToRgb(typedPayload.properties.fill)
-            }] : undefined,
-          }
-        };
+    const actionHandlers: Record<string, () => Record<string, any>> = {
+      'createElement': () => this.createElementArgs(typedPayload, args),
+      'createRectangle': () => this.createElementArgs(typedPayload, args),
+      'createText': () => this.createTextArgs(typedPayload, args),
+      'modifyElement': () => ({
+        fileKey: args.fileKey,
+        nodeId: payload.elementId,
+        properties: typedPayload.properties
+      }),
+      'deleteElement': () => ({
+        fileKey: args.fileKey,
+        nodeId: payload.elementId
+      }),
+      'groupElements': () => ({
+        fileKey: args.fileKey,
+        nodeIds: payload.elementIds,
+        name: payload.groupName
+      }),
+      'exportDesign': () => ({
+        fileKey: args.fileKey,
+        nodeIds: payload.nodeIds,
+        format: payload.format || 'PNG',
+        scale: typedPayload.options?.scale || 1
+      }),
+      'getFileInfo': () => ({ fileKey: args.fileKey }),
+      'listElements': () => ({
+        fileKey: args.fileKey,
+        nodeId: payload.pageId
+      })
+    };
 
-      case 'createText':
-        return {
-          fileKey: args.fileKey,
-          text: typedPayload.properties?.text || 'Text',
-          properties: {
-            x: typedPayload.properties?.x || 0,
-            y: typedPayload.properties?.y || 0,
-            fontSize: typedPayload.properties?.fontSize || 16,
-            fontFamily: typedPayload.properties?.fontFamily || 'Inter',
-          }
-        };
+    const handler = actionHandlers[action];
+    return handler ? handler() : args;
+  }
 
-      case 'modifyElement':
-        return {
-          fileKey: args.fileKey,
-          nodeId: payload.elementId,
-          properties: typedPayload.properties
-        };
+  private createElementArgs(payload: any, args: any): Record<string, any> {
+    return {
+      fileKey: args.fileKey,
+      type: payload.elementType || 'RECTANGLE',
+      properties: {
+        width: payload.properties?.width || 100,
+        height: payload.properties?.height || 100,
+        x: payload.properties?.x || 0,
+        y: payload.properties?.y || 0,
+        fills: payload.properties?.fill ? [{
+          type: 'SOLID',
+          color: this.hexToRgb(payload.properties.fill)
+        }] : undefined,
+      }
+    };
+  }
 
-      case 'deleteElement':
-        return {
-          fileKey: args.fileKey,
-          nodeId: payload.elementId
-        };
-
-      case 'groupElements':
-        return {
-          fileKey: args.fileKey,
-          nodeIds: payload.elementIds,
-          name: payload.groupName
-        };
-
-      case 'exportDesign':
-        return {
-          fileKey: args.fileKey,
-          nodeIds: payload.nodeIds,
-          format: payload.format || 'PNG',
-          scale: typedPayload.options?.scale || 1
-        };
-
-      case 'getFileInfo':
-        return {
-          fileKey: args.fileKey
-        };
-
-      case 'listElements':
-        return {
-          fileKey: args.fileKey,
-          nodeId: payload.pageId
-        };
-
-      default:
-        return args;
-    }
+  private createTextArgs(payload: any, args: any): Record<string, any> {
+    return {
+      fileKey: args.fileKey,
+      text: payload.properties?.text || 'Text',
+      properties: {
+        x: payload.properties?.x || 0,
+        y: payload.properties?.y || 0,
+        fontSize: payload.properties?.fontSize || 16,
+        fontFamily: payload.properties?.fontFamily || 'Inter',
+      }
+    };
   }
 
   hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -391,64 +334,9 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
     return this.mcpClient;
   }
 
-  private async callFigmaMCPWithPrompt(fileKey: string, prompt: string, accessToken: string): Promise<any> {
-    try {
-      if (!accessToken) {
-        throw new Error("No access token provided or token has expired");
-      }
-
-      const result = await this.mcpClient.callTools("figma_modify", {
-        fileKey,
-        prompt,
-        accessToken
-      });
-
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-
-      if (message.includes("token") &&
-        (message.includes("expired") || message.includes("invalid") || message.includes("unauthorized"))) {
-        this.emit("error", "Figma access token has expired or is invalid. Please re-authenticate.");
-        throw new Error("Figma access token expired. Please re-authenticate with Figma.");
-      }
-
-      this.emit("error", `MCP call failed: ${message}`);
-      throw new Error(`Failed to process prompt through MCP: ${message}`);
-    }
-  }
-
-  private async applyChangesToFigma(fileKey: string, changes: any, accessToken: string): Promise<void> {
-    try {
-      this.emit("info", "Applying changes to Figma file...");
-
-      const response = await fetch(`https://api.figma.com/v1/files/${fileKey}`, {
-        method: 'POST',
-        headers: {
-          'X-Figma-Token': accessToken,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(changes)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Figma API error: ${response.status} ${response.statusText}`);
-      }
-
-      this.emit("info", "Changes applied successfully!");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      this.emit("error", `Failed to apply changes to Figma file: ${message}`);
-      throw error;
-    }
-  }
-
   private extractFileKey(input: string): string {
     const trimmed = input?.trim();
-
-    if (!trimmed) {
-      return '';
-    }
+    if (!trimmed) return '';
 
     if (!trimmed.includes('/') && /^[a-zA-Z0-9]{5,}$/.test(trimmed)) {
       return trimmed;
@@ -456,42 +344,38 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
 
     try {
       const url = new URL(trimmed);
+      return this.extractFromURL(url);
+    } catch {
+      return this.extractWithRegex(trimmed);
+    }
+  }
 
-      const match = url.pathname.match(/\/(file|design|proto)\/([a-zA-Z0-9]+)/);
-      if (match && match[2]) {
-        return match[2];
-      }
-
-      if (url.hostname === 'embed.figma.com') {
-        const embedMatch = url.pathname.match(/\/(design|proto)\/([a-zA-Z0-9]+)/);
-        if (embedMatch && embedMatch[2]) {
-          return embedMatch[2];
-        }
-      }
-
-      if (url.hostname === 'www.figma.com' && url.pathname === '/embed' && url.searchParams.has('url')) {
-        const embedUrl = url.searchParams.get('url');
-        if (embedUrl) {
-          const embedMatch = decodeURIComponent(embedUrl).match(/\/(file|design|proto)\/([a-zA-Z0-9]+)/);
-          if (embedMatch && embedMatch[2]) {
-            return embedMatch[2];
-          }
-        }
-      }
-    } catch (error) {
+  private extractFromURL(url: URL): string {
+    if (url.hostname === 'embed.figma.com') {
+      const match = url.pathname.match(/\/(design|proto)\/([a-zA-Z0-9]+)/);
+      if (match?.[2]) return match[2];
     }
 
-    const fallbackMatch = trimmed.match(/\/(file|design|proto)\/([a-zA-Z0-9]+)/);
-    if (fallbackMatch && fallbackMatch[2]) {
-      return fallbackMatch[2];
+    if (url.hostname === 'www.figma.com' && url.pathname === '/embed') {
+      const embedUrl = url.searchParams.get('url');
+      if (embedUrl) {
+        const match = decodeURIComponent(embedUrl).match(/\/(file|design|proto)\/([a-zA-Z0-9]+)/);
+        if (match?.[2]) return match[2];
+      }
     }
 
-    const lastResort = trimmed.match(/([a-zA-Z0-9]{10,})/);
-    if (lastResort && lastResort[1]) {
-      return lastResort[1];
-    }
+    const match = url.pathname.match(/\/(file|design|proto)\/([a-zA-Z0-9]+)/);
+    if (match?.[2]) return match[2];
 
     return '';
+  }
+
+  private extractWithRegex(input: string): string {
+    const standardMatch = input.match(/\/(file|design|proto)\/([a-zA-Z0-9]+)/);
+    if (standardMatch?.[2]) return standardMatch[2];
+
+    const lastResort = input.match(/([a-zA-Z0-9]{10,})/);
+    return lastResort?.[1] || '';
   }
 
   private generateEmbedUrl(fileId: string, accessToken?: string, nodeId?: string): string {
@@ -500,8 +384,6 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
     if (!fileKey) {
       throw new Error("Invalid Figma file ID or URL");
     }
-
-    let embedUrl = `https://embed.figma.com/proto/${fileKey}`;
 
     const params = new URLSearchParams();
 
@@ -512,10 +394,7 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
 
     params.append('embed-host', 'localhost:5173');
 
-    if (params.toString()) {
-      embedUrl += `?${params.toString()}`;
-    }
-
-    return embedUrl;
+    const queryString = params.toString();
+    return `https://embed.figma.com/proto/${fileKey}${queryString ? `?${queryString}` : ''}`;
   }
 }
