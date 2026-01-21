@@ -1,0 +1,21 @@
+{
+    "name": "SuperDesign AI",
+    "id": "superdesign-ai-plugin",
+    "api": "1.0.0",
+    "main": "code.js",
+    "ui": "ui.html",
+    "capabilities": [],
+    "enableProposedApi": false,
+    "editorType": [
+        "figma"
+    ],
+    "networkAccess": {
+        "allowedDomains": [
+            "ws://localhost:3847",
+            "http://localhost:3846",
+            "http://localhost:4000",
+            "http://localhost:5173"
+        ],
+        "reasoning": "Connect to SuperDesign server for AI-powered design generation"
+    }
+}

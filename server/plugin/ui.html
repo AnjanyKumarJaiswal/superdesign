@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 12px;
+      background: var(--figma-color-bg);
+      color: var(--figma-color-text);
+      padding: 12px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--figma-color-border);
+    }
+    
+    .logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      font-size: 14px;
+    }
+    
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .subtitle {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+    
+    .status-section {
+      background: var(--figma-color-bg-secondary);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    
+    .status-row:last-child {
+      margin-bottom: 0;
+    }
+    
+    .status-label {
+      color: var(--figma-color-text-secondary);
+    }
+    
+    .status-value {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    
+    .status-dot.connected {
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e80;
+    }
+    
+    .status-dot.disconnected {
+      background: #ef4444;
+    }
+    
+    .status-dot.connecting {
+      background: #eab308;
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .btn-secondary {
+      background: var(--figma-color-bg-tertiary);
+      color: var(--figma-color-text);
+      margin-top: 8px;
+    }
+    
+    .btn-secondary:hover {
+      background: var(--figma-color-bg-hover);
+    }
+    
+    .log-section {
+      flex: 1;
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    
+    .log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    
+    .log-title {
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--figma-color-text-secondary);
+    }
+    
+    .log-clear {
+      font-size: 11px;
+      color: var(--figma-color-text-tertiary);
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+    
+    .log-clear:hover {
+      color: var(--figma-color-text);
+    }
+    
+    .log-container {
+      flex: 1;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      padding: 8px;
+      overflow-y: auto;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 11px;
+    }
+    
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid var(--figma-color-border);
+      display: flex;
+      gap: 8px;
+    }
+    
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+    
+    .log-time {
+      color: var(--figma-color-text-tertiary);
+      flex-shrink: 0;
+    }
+    
+    .log-message {
+      word-break: break-word;
+    }
+    
+    .log-message.info { color: var(--figma-color-text); }
+    .log-message.success { color: #22c55e; }
+    .log-message.error { color: #ef4444; }
+    .log-message.warn { color: #eab308; }
+    
+    .commands-count {
+      font-size: 11px;
+      color: var(--figma-color-text-tertiary);
+      text-align: center;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">SD</div>
+    <div>
+      <div class="title">SuperDesign AI</div>
+      <div class="subtitle">Figma Plugin v1.0.0</div>
+    </div>
+  </div>
+  
+  <div class="status-section">
+    <div class="status-row">
+      <span class="status-label">WebSocket</span>
+      <span class="status-value">
+        <span id="ws-dot" class="status-dot disconnected"></span>
+        <span id="ws-status">Disconnected</span>
+      </span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Server</span>
+      <span class="status-value">
+        <span id="server-url">ws://localhost:3847</span>
+      </span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Commands</span>
+      <span class="status-value">
+        <span id="command-count">0</span>
+      </span>
+    </div>
+  </div>
+  
+  <button id="connect-btn" class="btn btn-primary">Connect to Server</button>
+  <button id="test-btn" class="btn btn-secondary" disabled>Test Connection</button>
+  
+  <div class="log-section">
+    <div class="log-header">
+      <span class="log-title">Activity Log</span>
+      <button class="log-clear" onclick="clearLogs()">Clear</button>
+    </div>
+    <div id="log-container" class="log-container">
+      <div class="log-entry">
+        <span class="log-time">--:--:--</span>
+        <span class="log-message info">Waiting for connection...</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WEBSOCKET_URL = 'ws://localhost:3847';
+    let ws = null;
+    let commandCount = 0;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const pendingCommands = new Map();
+    
+    // DOM elements
+    const connectBtn = document.getElementById('connect-btn');
+    const testBtn = document.getElementById('test-btn');
+    const wsDot = document.getElementById('ws-dot');
+    const wsStatus = document.getElementById('ws-status');
+    const commandCountEl = document.getElementById('command-count');
+    const logContainer = document.getElementById('log-container');
+    
+    // Log function
+    function addLog(message, level = 'info') {
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-message ${level}">${message}</span>
+      `;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+    
+    function clearLogs() {
+      logContainer.innerHTML = '';
+      addLog('Logs cleared', 'info');
+    }
+    
+    function updateStatus(connected, connecting = false) {
+      if (connecting) {
+        wsDot.className = 'status-dot connecting';
+        wsStatus.textContent = 'Connecting...';
+        connectBtn.disabled = true;
+        testBtn.disabled = true;
+      } else if (connected) {
+        wsDot.className = 'status-dot connected';
+        wsStatus.textContent = 'Connected';
+        connectBtn.textContent = 'Disconnect';
+        connectBtn.disabled = false;
+        testBtn.disabled = false;
+      } else {
+        wsDot.className = 'status-dot disconnected';
+        wsStatus.textContent = 'Disconnected';
+        connectBtn.textContent = 'Connect to Server';
+        connectBtn.disabled = false;
+        testBtn.disabled = true;
+      }
+    }
+    
+    function connect() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+        return;
+      }
+      
+      updateStatus(false, true);
+      addLog('Connecting to ' + WEBSOCKET_URL + '...', 'info');
+      
+      try {
+        ws = new WebSocket(WEBSOCKET_URL);
+        
+        ws.onopen = () => {
+          reconnectAttempts = 0;
+          updateStatus(true);
+          addLog('Connected to SuperDesign server!', 'success');
+          
+          // Send handshake
+          ws.send(JSON.stringify({
+            type: 'handshake',
+            client: 'figma-plugin',
+            version: '1.0.0'
+          }));
+        };
+        
+        ws.onclose = () => {
+          updateStatus(false);
+          addLog('Disconnected from server', 'warn');
+          
+          // Auto-reconnect
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            const delay = Math.min(1000 * reconnectAttempts, 5000);
+            addLog(`Reconnecting in ${delay/1000}s... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, 'info');
+            setTimeout(connect, delay);
+          }
+        };
+        
+        ws.onerror = (error) => {
+          addLog('WebSocket error occurred', 'error');
+          console.error('WebSocket error:', error);
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            handleServerMessage(message);
+          } catch (e) {
+            addLog('Failed to parse server message', 'error');
+          }
+        };
+        
+      } catch (error) {
+        updateStatus(false);
+        addLog('Failed to connect: ' + error.message, 'error');
+      }
+    }
+    
+    function handleServerMessage(message) {
+      addLog(`Received: ${message.type}`, 'info');
+      
+      switch (message.type) {
+        case 'command':
+          // Server wants us to execute a command
+          commandCount++;
+          commandCountEl.textContent = commandCount;
+          addLog(`Executing command: ${message.command.type}`, 'info');
+          
+          // Send to plugin code for execution
+          parent.postMessage({
+            pluginMessage: {
+              type: 'execute-command',
+              command: message.command
+            }
+          }, '*');
+          break;
+          
+        case 'ping':
+          // Respond to ping
+          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+          break;
+          
+        case 'handshake-ack':
+          addLog('Handshake acknowledged by server', 'success');
+          break;
+          
+        default:
+          addLog(`Unknown message type: ${message.type}`, 'warn');
+      }
+    }
+    
+    function testConnection() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        addLog('Sending test ping...', 'info');
+        ws.send(JSON.stringify({ type: 'test', timestamp: Date.now() }));
+        
+        // Also test plugin
+        parent.postMessage({
+          pluginMessage: { type: 'get-selection' }
+        }, '*');
+      }
+    }
+    
+    // Handle messages from plugin code
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+      
+      switch (msg.type) {
+        case 'log':
+          addLog(msg.data.message, msg.data.level);
+          break;
+          
+        case 'command-result':
+          // Send result back to server
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'command-result',
+              id: msg.data.id,
+              success: msg.data.success,
+              data: msg.data.data,
+              error: msg.data.error
+            }));
+          }
+          
+          if (msg.data.success) {
+            addLog(`Command completed: ${JSON.stringify(msg.data.data).substring(0, 50)}...`, 'success');
+          } else {
+            addLog(`Command failed: ${msg.data.error}`, 'error');
+          }
+          break;
+          
+        case 'selection':
+          addLog(`Selection: ${msg.data.count} nodes`, 'info');
+          break;
+          
+        case 'plugin-ready':
+          addLog('Plugin code initialized', 'success');
+          break;
+          
+        case 'page-info':
+          addLog(`Page: ${msg.data.pageName} (${msg.data.childrenCount} children)`, 'info');
+          break;
+      }
+    };
+    
+    // Event listeners
+    connectBtn.addEventListener('click', connect);
+    testBtn.addEventListener('click', testConnection);
+    
+    // Auto-connect on load
+    setTimeout(connect, 500);
+  </script>
+</body>
+</html>

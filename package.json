@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "server/plugin"
   ],
   "scripts": {
     "dev": "turbo run dev",
@@ -36,7 +37,9 @@
     "docker:down": "docker-compose down",
     "docker:down:dev": "docker-compose -f docker-compose.dev.yml down",
     "docker:logs": "docker-compose logs -f",
-    "docker:clean": "docker-compose down -v --rmi all"
+    "docker:clean": "docker-compose down -v --rmi all",
+    "plugin:build": "turbo run build --filter=superdesign-figma-plugin",
+    "plugin:watch": "turbo run watch --filter=superdesign-figma-plugin"
   },
   "devDependencies": {
     "turbo": "^2.5.5",

@@ -48,6 +48,10 @@
         },
         "db:seed": {
             "cache": false
+        },
+        "watch": {
+            "cache": false,
+            "persistent": true
         }
     }
 }

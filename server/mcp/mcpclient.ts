@@ -131,20 +131,39 @@ export class MCPClient {
     console.log(`${LOG} Available tools for Gemini:`);
     console.log(toolDescriptions);
 
-    const sysPrompt = `You are a design automation assistant.
+    const sysPrompt = `You are a design automation assistant for Figma.
 Based on the user's request, generate a step-by-step plan using the available tools.
+
 Available tools for ${this.platform}:
 ${toolDescriptions}
 
-IMPORTANT: Respond ONLY with a valid JSON array of steps.
-Each step must have "tool" (string) and "params" (object) keys.
-Example response:
+IMPORTANT INSTRUCTIONS:
+1. For CREATING new elements (buttons, shapes, text, frames), use tools starting with "plugin_":
+   - plugin_create_rectangle: Create rectangles (use for backgrounds, cards, containers)
+   - plugin_create_ellipse: Create circles/ellipses
+   - plugin_create_text: Create text labels
+   - plugin_create_frame: Create frame containers
+   - plugin_create_button: Create complete buttons with text (preferred for buttons!)
+   - plugin_set_fill: Change colors
+   - plugin_group_nodes: Group elements together
+
+2. For READING existing design info, use tools like get_design_context, get_metadata, get_screenshot.
+
+3. Respond ONLY with a valid JSON array of steps.
+4. Each step must have "tool" (string) and "params" (object) keys.
+5. For colors, use hex format like "#FF0000" for red, "#3B82F6" for blue, "#FFFFFF" for white.
+
+Example for "make a red button":
 [
-  {"tool": "get_design_context", "params": {"fileKey": "${fileId}"}},
-  {"tool": "get_metadata", "params": {"fileKey": "${fileId}"}}
+  {"tool": "plugin_create_button", "params": {"text": "Click Me", "backgroundColor": "#FF0000", "textColor": "#FFFFFF", "width": 150, "height": 48, "cornerRadius": 8}}
 ]
 
-User's file ID: ${fileId}
+Example for "create a blue card with title":
+[
+  {"tool": "plugin_create_frame", "params": {"width": 300, "height": 200, "color": "#3B82F6", "name": "Card"}},
+  {"tool": "plugin_create_text", "params": {"text": "Card Title", "fontSize": 24, "color": "#FFFFFF", "x": 20, "y": 20}}
+]
+
 User's request: ${userPrompt}`;
 
     try {

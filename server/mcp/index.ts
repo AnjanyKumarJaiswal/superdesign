@@ -1,7 +1,8 @@
 import { startMCPServer, shutdownMCPServer, mcpServer } from "@/mcp/mcpServer";
 import { MCPClient } from "@/mcp/mcpClient";
+import { getPluginBridge, startPluginBridge, shutdownPluginBridge } from "@/mcp/pluginBridge";
 import { colors } from "@/types";
-export { shutdownMCPServer }
+export { shutdownMCPServer, getPluginBridge, startPluginBridge, shutdownPluginBridge };
 // export const mcp = mcpServer();
 
 const MCP_SERVER_PORT = parseInt(process.env.SUPERDESIGN_MCP_PORT || "3846", 10);

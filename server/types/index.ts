@@ -156,3 +156,24 @@ export const colors = {
     cyan: "\x1b[36m",
     white: "\x1b[37m",
 };
+
+
+export interface PluginCommand {
+    id: string;
+    type: string;
+    params: Record<string, any>;
+}
+
+export interface CommandResult {
+    id: string;
+    success: boolean;
+    data?: any;
+    error?: string;
+}
+
+export interface PendingCommand {
+    command: PluginCommand;
+    resolve: (result: CommandResult) => void;
+    reject: (error: Error) => void;
+    timeout: NodeJS.Timeout;
+}
