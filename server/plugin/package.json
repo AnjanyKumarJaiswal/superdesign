@@ -1,0 +1,15 @@
+{
+    "name": "superdesign-figma-plugin",
+    "version": "1.0.0",
+    "private": true,
+    "description": "SuperDesign AI Figma Plugin for design generation",
+    "scripts": {
+        "build": "esbuild code.ts --bundle --outfile=code.js --target=es2020",
+        "watch": "esbuild code.ts --bundle --outfile=code.js --target=es2020 --watch"
+    },
+    "devDependencies": {
+        "@figma/plugin-typings": "^1.122.0",
+        "esbuild": "^0.27.2",
+        "typescript": "^5.9.0"
+    }
+}

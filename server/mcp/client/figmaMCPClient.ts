@@ -48,6 +48,21 @@ export class FigmaMCPClient {
         }
     }
 
+    private cleanNodeId(id: string): string {
+        if (!id) return id;
+        if (id.includes('figma.com')) {
+            try {
+                const url = new URL(id);
+                const nodeId = url.searchParams.get('node-id');
+                if (nodeId) return nodeId.replace('-', ':');
+                return "0:1";
+            } catch (e) {
+                return id;
+            }
+        }
+        return id;
+    }
+
     async ping(): Promise<boolean> {
         try {
             console.log("[FIGMA-MCP-CLIENT] Attempting to connect to Figma MCP server...");
@@ -57,7 +72,7 @@ export class FigmaMCPClient {
             const { tools } = await this.mcpClient.listTools();
 
             if (tools) {
-                console.log(`[FIGMA-MCP-CLIENT] Connected successfully, found ${tools.length} tools`);
+                console.log(`[FIGMA-MCP-CLIENT] Connected successfully (${tools.length} tools available)`);
                 this.connected = true;
                 return true;
             }
@@ -97,7 +112,6 @@ export class FigmaMCPClient {
 
     async listTools(): Promise<any[]> {
         try {
-            console.log("[FIGMA-MCP-CLIENT] Listing available tools...");
             if (!this.connected) {
                 const isConnected = await this.ping();
                 if (!isConnected) {
@@ -108,7 +122,6 @@ export class FigmaMCPClient {
             const { tools } = await this.mcpClient.listTools();
 
             if (tools) {
-                console.log(`[FIGMA-MCP-CLIENT] Found ${tools.length} tools:`, tools.map((tool: any) => tool.name));
                 return tools;
             }
             console.warn("[FIGMA-MCP-CLIENT] Unexpected tools list response format");
@@ -122,7 +135,7 @@ export class FigmaMCPClient {
         }
     }
 
-    async callTools(toolName: string, args: Record<string, any> = {}): Promise<any> {
+    async callTool(toolName: string, args: Record<string, any> = {}): Promise<any> {
         try {
             if (!this.connected) {
                 console.log("[FIGMA-MCP-CLIENT] Not connected, attempting to connect...");
@@ -131,6 +144,11 @@ export class FigmaMCPClient {
                     throw new Error("Cannot call tool: MCP server not connected");
                 }
             }
+
+            if (args.nodeId) {
+                args.nodeId = this.cleanNodeId(args.nodeId);
+            }
+
             console.log(`[FIGMA-MCP-CLIENT] Calling tool: ${toolName}`);
 
             const res = await this.mcpClient.callTool({
@@ -161,7 +179,7 @@ export class FigmaMCPClient {
 
             if (designTool) {
                 console.log(`[FIGMA-MCP-CLIENT] Using design tool: ${designTool.name}`);
-                return await this.callTools(designTool.name, {
+                return await this.callTool(designTool.name, {
                     fileKey: fileKey,
                     prompt,
                     ...(this.accessToken && { accessToken: this.accessToken })

@@ -60,7 +60,6 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
 
   async initialize(): Promise<void> {
     try {
-      this.emitInfo("Connecting to Figma MCP Server...");
 
       const isAlive = await this.mcpClient.ping().catch(() => false);
 
@@ -74,7 +73,7 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
       this.isConnected = tools.length > 0;
 
       if (this.isConnected) {
-        this.emitInfo(`Connected to Figma MCP Server. Available tools: ${tools.length}`);
+        // Connection successful, tools loaded silently
       } else {
         this.emitInfo("Connected to Figma MCP Server but no tools available");
       }
@@ -140,7 +139,7 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
     });
 
     const toolArgs = this.prepareToolArguments(task);
-    const mcpResult = await this.mcpClient.callTools(toolName, toolArgs);
+    const mcpResult = await this.mcpClient.callTool(toolName, toolArgs);
 
     this.emitTaskProgress(task, "Processing Figma response...", { result: mcpResult });
 
@@ -318,9 +317,9 @@ export class FigmaProvider extends EventEmitter implements MCPProvider {
   hexToRgb(hex: string): { r: number; g: number; b: number } {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
-      r: parseInt(result[1], 16) / 255,
-      g: parseInt(result[2], 16) / 255,
-      b: parseInt(result[3], 16) / 255,
+      r: parseInt(result[1] || '0', 16) / 255,
+      g: parseInt(result[2] || '0', 16) / 255,
+      b: parseInt(result[3] || '0', 16) / 255,
     } : { r: 0, g: 0, b: 0 };
   }
 
